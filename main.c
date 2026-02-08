@@ -20,8 +20,8 @@ int main() {
     if (!vm) return 1;
 
     printf("expected: 30\n");
-    pocol_run_vm(vm);
-
+    uint8_t ret = pocol_run_vm(vm);
     pocol_free_vm(vm);
-    return 0;
+
+    return ret;
 }

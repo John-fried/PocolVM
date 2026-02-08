@@ -55,8 +55,9 @@ ST_INLN uint32_t get_val(PocolVM *vm, uint8_t operand)
 
 /* Using computed goto for fast instruction
  * Warning!: this non-standard may cause warning when compiling with -Wpedantic,
+ * return the program exit state if done (halt)
  */
-void pocol_run_vm(PocolVM *vm)
+uint8_t pocol_run_vm(PocolVM *vm)
 {
 	ST_DATA void *dispatch_table[] = {
 		&&do_halt, &&do_push, &&do_pop, &&do_add, &&do_print
@@ -66,7 +67,7 @@ void pocol_run_vm(PocolVM *vm)
 	NEXT();	/* take first instruction */
 
 	do_halt:
-		exit(get_val(vm, vm->memory[vm->pc++]));
+		return get_val(vm, vm->memory[vm->pc++]);
 	do_push:	/* push <val> */
 		vm->stack[vm->sp++] = vm->memory[vm->pc++];
 		NEXT();
@@ -89,4 +90,6 @@ void pocol_run_vm(PocolVM *vm)
 	do_print:	/* print <src> (debugging) */
 		printf("%d\n", get_val(vm, vm->memory[vm->pc++]));
 		NEXT();
+
+	return 0;
 }

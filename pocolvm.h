@@ -25,6 +25,6 @@ typedef struct {
 
 PocolVM *pocol_make_vm(uint8_t *bytecode, size_t size);
 void pocol_free_vm(PocolVM *vm);
-void pocol_run_vm(PocolVM *vm);
+uint8_t pocol_run_vm(PocolVM *vm);
 
 #endif /* POCOL_POCOLVM_H */
