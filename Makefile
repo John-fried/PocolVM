@@ -1,6 +1,9 @@
-all: pocol
+TARGET = pocol
+SRCS = $(wildcard *.c)
 
-pocol:
-	gcc --std=c11 -Os -s -o pocol main.c pocolvm.c
+all: $(TARGET)
+
+$(TARGET):
+	gcc --std=c99 -O2 -s -o $(TARGET) $(SRCS)
 clean:
-	rm pocol
+	rm $(TARGET)

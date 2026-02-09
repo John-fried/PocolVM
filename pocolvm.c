@@ -11,6 +11,14 @@
 #include <stdio.h>
 #include <string.h>
 
+ST_DATA const Inst_Def inst_defs[COUNT_INST] = {
+    [INST_HALT]  = { .type = INST_HALT,  .name = "halt"  },
+    [INST_PUSH]  = { .type = INST_PUSH,  .name = "push"  },
+    [INST_POP]   = { .type = INST_POP,   .name = "pop"   },
+    [INST_ADD]   = { .type = INST_ADD,   .name = "add"   },
+    [INST_PRINT] = { .type = INST_PRINT, .name = "print" },
+};
+
 /* make and load bytecode into vm */
 PocolVM *pocol_make_vm(uint8_t *bytecode, size_t size)
 {
@@ -18,12 +26,13 @@ PocolVM *pocol_make_vm(uint8_t *bytecode, size_t size)
 	if (!vm)
 		return NULL;
 
-	memset(vm->memory, 0, MEMORY_SIZE); /* prevent garbage value from other program */
+	memset(vm->memory, 0, POCOL_MEMORY_SIZE); /* prevent garbage value from other program */
 	memset(vm->registers, 0, sizeof(vm->registers)); /* prevent garbage value from other program */
-	if (bytecode != NULL && size <= MEMORY_SIZE)
+	if (bytecode != NULL && size <= POCOL_MEMORY_SIZE)
 		memcpy(vm->memory, bytecode, size);
 
 	/* Set initial valuee */
+	vm->halt = 0;
 	vm->pc = 0;
 	vm->sp = 0;
 
@@ -39,57 +48,76 @@ void pocol_free_vm(PocolVM *vm)
 	free(vm);
 }
 
-/* --- Core execution --- */
-
 #define IS_MEM(operand) operand & 0x80
+#define MEM_OP(operand) operand & 0x7F
+#define REG_OP(operand) operand & 0x07
 
-/* helper for getting value between Register vs Memory */
+/* Register vs Memory */
 ST_INLN uint32_t get_val(PocolVM *vm, uint8_t operand)
 {
 	/* checks up if bit[7] is >1 or 0 */
 	if (IS_MEM(operand))
-		return vm->memory[operand & 0x7F];
+		return vm->memory[MEM_OP(operand)];
 
-	return vm->registers[operand & 0x07];
+	return vm->registers[REG_OP(operand)];
 }
 
-/* Using computed goto for fast instruction
- * Warning!: this non-standard may cause warning when compiling with -Wpedantic,
- * return the program exit state if done (halt)
- */
-uint8_t pocol_run_vm(PocolVM *vm)
+Err pocol_run_program(PocolVM *vm, int limit)
 {
-	ST_DATA void *dispatch_table[] = {
-		&&do_halt, &&do_push, &&do_pop, &&do_add, &&do_print
-	};
-
-	#define NEXT() goto *dispatch_table[vm->memory[vm->pc++]]
-	NEXT();	/* take first instruction */
-
-	do_halt:
-		return get_val(vm, vm->memory[vm->pc++]);
-	do_push:	/* push <val> */
-		vm->stack[vm->sp++] = vm->memory[vm->pc++];
-		NEXT();
-	do_pop:		/* pop <reg> */
-		vm->registers[vm->memory[vm->pc++] & 0x07] = vm->stack[--vm->sp];
-		NEXT();
-	do_add: {	/* add <dest>, <src> */
-		uint8_t dest_info = vm->memory[vm->pc++];
-		uint8_t src_info = vm->memory[vm->pc++];
-
-		uint32_t val1 = get_val(vm, dest_info);
-		uint32_t val2 = get_val(vm, src_info);
-		uint32_t result = val1 + val2;
-		if (IS_MEM(dest_info))
-			vm->memory[dest_info & 0x07] = result;
-		else
-			vm->registers[dest_info & 0x7F] = result;
-		NEXT();
+	while (limit != 0 && !vm->halt) {
+		Err err = pocol_run_inst(vm);
+		if (err != ERR_OK)
+			return err;
+		if (limit > 0)
+			--limit;
 	}
-	do_print:	/* print <src> (debugging) */
-		printf("%d\n", get_val(vm, vm->memory[vm->pc++]));
-		NEXT();
 
-	return 0;
+	return ERR_OK;
+}
+
+Err pocol_run_inst(PocolVM *vm)
+{
+	if (vm->pc >= POCOL_MEMORY_SIZE)
+		return ERR_ILLEGAL_INST_ACCESS;
+
+	#define CIR      (vm->memory[vm->pc]) /* CIR Value */
+	#define PEEK(n)  (vm->memory[vm->pc + (n)]) /* take CIR(n) without incrementing CIR */
+	#define NEXT     (vm->memory[vm->pc++])	/* take CIR then next CIR */
+	#define NNEXT(n) (vm->memory[vm->pc += (n)]) /* take CIR(n) */
+
+	uint8_t op = NEXT;
+	switch (op) {
+		case INST_HALT:
+			vm->halt = 1;
+			break;
+
+		case INST_PUSH:
+			if (vm->sp >= POCOL_STACK_SIZE) return ERR_STACK_OVERFLOW;
+			vm->stack[vm->sp++] = NEXT;
+			break;
+
+		case INST_POP:
+			if (vm->sp == 0) return ERR_STACK_UNDERFLOW;
+			vm->registers[ REG_OP(NEXT) ] = vm->stack[--vm->sp];
+			break;
+
+		case INST_ADD: {
+			// res = CIR <dest> + PEEK(1) <src>
+			uint32_t res = get_val(vm, CIR) + get_val(vm, PEEK(1));
+			if (IS_MEM( CIR ))
+				vm->memory[ MEM_OP(NEXT) ] = (uint8_t) res;
+			else
+				vm->registers[ REG_OP(NEXT) ] = res;
+			vm->pc++;
+		} break;
+
+		case INST_PRINT: /* (for debugging) */
+			printf("%d", get_val(vm, NEXT));
+			break;
+
+		default:
+			return ERR_ILLEGAL_INST;
+	}
+
+	return ERR_OK;
 }

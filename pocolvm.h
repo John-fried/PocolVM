@@ -8,23 +8,49 @@
 #ifndef POCOL_POCOLVM_H
 #define POCOL_POCOLVM_H
 
-#define MEMORY_SIZE	65535
-#define STACK_SIZE	256
+#define POCOL_MEMORY_SIZE	65535
+#define POCOL_STACK_SIZE	512
 
 #include <stdint.h>
 #include <stdlib.h>	/* used for size_t and also used for memory management */
 
+typedef enum {
+	ERR_OK = 0,
+	ERR_ILLEGAL_INST,
+	ERR_ILLEGAL_INST_ACCESS,
+	ERR_STACK_OVERFLOW,
+	ERR_STACK_UNDERFLOW,
+} Err;
+
+typedef uint32_t Inst_addr;
+
+typedef enum {
+    INST_HALT = 0,
+    INST_PUSH,
+    INST_POP,
+    INST_ADD,
+    INST_PRINT,
+    COUNT_INST	/* last index, start with 0 (halt) and this counts */
+} Inst_Type;
+
+typedef struct {
+    Inst_Type type;
+    const char *name;
+} Inst_Def;
+
 typedef struct {
 	/* Basic components */
-	uint8_t  memory[MEMORY_SIZE];  /* Memory address Register */
-	uint16_t pc; /* program counter (64Kb memory, 0-65.535) as the MEMORY_SIZE */
-	uint32_t stack[STACK_SIZE]; /* stack for operation */
-	uint8_t  sp; /* stack pointer (0-255) as the STACK_SIZE and +1 space */
-	uint32_t registers[8]; /* 8 registers */
+	uint8_t   memory[POCOL_MEMORY_SIZE];  	/* Memory address Register */
+	Inst_addr pc; 			/* program counter (64Kb memory, 0-65.535) as the MEMORY_SIZE */
+	uint32_t  stack[POCOL_STACK_SIZE]; 	/* stack for operation */
+	uint16_t   sp; 			/* stack pointer (0-255) as the STACK_SIZE and +1 space */
+	uint32_t  registers[8]; 		/* 8 registers */
+	unsigned int halt : 1;		/* halt status */
 } PocolVM;
 
 PocolVM *pocol_make_vm(uint8_t *bytecode, size_t size);
 void pocol_free_vm(PocolVM *vm);
-uint8_t pocol_run_vm(PocolVM *vm);
+Err pocol_run_program(PocolVM *vm, int limit);
+Err pocol_run_inst(PocolVM *vm);
 
 #endif /* POCOL_POCOLVM_H */
