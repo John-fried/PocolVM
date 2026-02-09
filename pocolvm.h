@@ -8,6 +8,7 @@
 #ifndef POCOL_POCOLVM_H
 #define POCOL_POCOLVM_H
 
+#define POCOL_OPERAND_MAX	2
 #define POCOL_MEMORY_SIZE	(512 * 100)
 #define POCOL_STACK_SIZE	1024
 
@@ -26,6 +27,12 @@ typedef uint32_t Inst_Addr;
 typedef uint32_t Stack_Addr;
 
 typedef enum {
+    OPR_NONE = 0,
+    OPR_REG,    /* Register (r0-r7) */
+    OPR_IMM,    /* Immediate/Integer (5, 100) */
+} OperandType;
+
+typedef enum {
     INST_HALT = 0,
     INST_PUSH,
     INST_POP,
@@ -37,6 +44,8 @@ typedef enum {
 typedef struct {
     Inst_Type type;
     const char *name;
+    int operand;
+    OperandType operand_type[POCOL_OPERAND_MAX];
 } Inst_Def;
 
 typedef struct {

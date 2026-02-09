@@ -12,14 +12,6 @@
 #include <stdio.h>
 #include <string.h>
 
-ST_DATA const Inst_Def inst_defs[COUNT_INST] = {
-    [INST_HALT]  = { .type = INST_HALT,  .name = "halt"  },
-    [INST_PUSH]  = { .type = INST_PUSH,  .name = "push"  },
-    [INST_POP]   = { .type = INST_POP,   .name = "pop"   },
-    [INST_ADD]   = { .type = INST_ADD,   .name = "add"   },
-    [INST_PRINT] = { .type = INST_PRINT, .name = "print" },
-};
-
 /* make and load bytecode into vm */
 PocolVM *pocol_make_vm(uint8_t *bytecode, size_t size)
 {

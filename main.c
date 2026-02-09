@@ -1,3 +1,10 @@
+/* main.c -- The entry point of Pocol */
+
+/* Copyright (C) 2026 Bayu Setiawan
+   This file is part of Pocol, the Pocol Virtual Machine.
+   SPDX-License-Identifier: MIT
+*/
+
 #include <stdio.h>
 #include <stdint.h>
 #include "pocolvm.h"
