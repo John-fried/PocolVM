@@ -28,11 +28,6 @@ int main(int argc, char **argv)
 
 		if (pocol_load_program_into_vm(argv[1], &vm) == 0) {
 			err = pocol_execute_program(vm, -1);
-			if (err != ERR_OK) {
-				fprintf(stderr, "\nRuntime Error: %d\n", err);
-			}
-
-			putchar('\n');
 			pocol_free_vm(vm);
 		}
 		return (int)err;

@@ -5,6 +5,8 @@
    SPDX-License-Identifier: MIT
 */
 
+#define _DEFAULT_SOURCE
+#define _GNU_SOURCE
 #include "pocolvm.h"
 #include "common.h"
 #include <assert.h>
@@ -12,15 +14,23 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <errno.h>
+#include <unistd.h>
 
 ST_DATA const char *current_path;
+ST_DATA unsigned int tap = 0;
 
 ST_FUNC void pocol_error(const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
-	fprintf(stderr, "%s: vm.error: ", current_path);
+	if (access(current_path, F_OK) == 0 && !tap) {
+		tap++;
+		fprintf(stderr, "in file `%s`:\n", current_path);
+	}
+
+	fprintf(stderr, "vm.error: ");
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, "\n");
 	fflush(stderr);
@@ -32,22 +42,23 @@ int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 	current_path = path;
 	errno = 0;
 
-	FILE *fp = fopen(path, "rb"); // read binary mode
+	struct stat st;
+	long size = 0;
+	FILE *fp = fopen(path, "rb");
 	if (!fp)
 		goto error;
 
-	fseek(fp, 0, SEEK_END);
-	long size = ftell(fp);
-	fseek(fp, 0, SEEK_SET);
+	if (fstat(fileno(fp), &st) < 0)
+		goto error;
 
+	size = st.st_size;
 	if (size == 0) {
-		pocol_error("Program section is empty.");
+		pocol_error("no program to load");
 		goto error;
 	}
 
 	if (size > POCOL_MEMORY_SIZE) {
-		pocol_error("Program section is too big. This file contains %ld instructions. But the capacity is %d",
-			size, POCOL_MEMORY_SIZE);
+		pocol_error("size exceeds limit: %ld/%d bytes", size, POCOL_MEMORY_SIZE);
 		goto error;
 	}
 
@@ -69,7 +80,7 @@ error:
 	if (errno)
 		pocol_error("%s", strerror(errno));
 
-	fprintf(stderr, "vm.load: error: terminated\n");
+	fprintf(stderr, "%s: error: load failed with %d\n", program_invocation_name, errno);
 	if (fp) fclose(fp);
 	return -1;
 }
@@ -103,7 +114,7 @@ Err pocol_execute_program(PocolVM *vm, int limit)
 	while (limit != 0 && !vm->halt) {
 		Err err = pocol_execute_inst(vm);
 		if (err != ERR_OK) {
-			pocol_error("%d: %s", vm->memory[vm->pc], err_as_cstr(err));
+			pocol_error("0x%02X: %s (addr: %u)", vm->memory[vm->pc], err_as_cstr(err), vm->pc);
 			return err;
 		}
 		if (limit > 0)
