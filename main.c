@@ -1,8 +1,9 @@
+#include "pocolvm.h"
+#include "compiler.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include "pocolvm.h"
-#include "compiler.h"
 
 void print_usage()
 {

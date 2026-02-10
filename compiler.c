@@ -1,6 +1,7 @@
 #include "common.h"
 #include "pocolvm.h"
 #include "compiler.h"
+
 #include <ctype.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -32,6 +33,9 @@ ST_DATA unsigned int line = 1;
 ST_DATA unsigned int col = 1;
 ST_DATA unsigned int error_count = 0;
 
+/* forward declaration*/
+ST_FUNC void consume(void);
+
 /*------------------------------------------------*/
 
 ST_FUNC void compiler_error(const char *fmt, ...)
@@ -43,6 +47,9 @@ ST_FUNC void compiler_error(const char *fmt, ...)
 	fprintf(stderr, "\n");
 	fflush(stderr);
 	error_count++;
+
+	// skip until newline (one line, one error)
+	while (*cursor != '\n' && *cursor != '\0') consume();
 }
 
 /********************** Lexer *************************/
@@ -204,8 +211,13 @@ int pocol_compile_file(char *path, char *out)
 	source = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (source == MAP_FAILED) goto error;
 
-	p.out = fopen(out, "wb");
-	if (!p.out) goto error;
+	/* create temp output file */
+	char tempfile[1024];
+	snprintf(tempfile, sizeof(tempfile), "/tmp/%ju.pob.tmp", (uintmax_t)st.st_ino);
+
+	p.out = fopen(tempfile, "wb");
+	if (!p.out)
+		goto error;
 
 	cursor = source;
 	p.lookahead = next();
@@ -222,6 +234,13 @@ int pocol_compile_file(char *path, char *out)
 	munmap(source, st.st_size);
 	close(fd);
 	fclose(p.out);
+
+	if (rename(tempfile, out) < 0) {
+		source_file = tempfile;
+		compiler_error("failed to move to `%s`", out);
+		unlink(tempfile);
+		goto error;
+	}
 
 	// mark executable
 	chmod(out, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP
