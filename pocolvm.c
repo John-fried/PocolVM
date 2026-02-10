@@ -20,18 +20,12 @@
 #include <unistd.h>
 
 ST_DATA const char *current_path;
-ST_DATA unsigned int tap = 0;
 
 ST_FUNC void pocol_error(const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
-	if (access(current_path, F_OK) == 0 && !tap) {
-		tap++;
-		fprintf(stderr, "in file `%s`:\n", current_path);
-	}
-
-	fprintf(stderr, "vm.error: ");
+	fprintf(stderr, "vm.error: %s: ", current_path);
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, "\n");
 	fflush(stderr);
@@ -54,7 +48,18 @@ int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 
 	size = st.st_size;
 	if (size == 0) {
-		pocol_error("no program to load");
+		errno = ENOEXEC;
+		goto error;
+	}
+
+	uint32_t magic_header;
+	if (fread(&magic_header, sizeof(uint32_t), 1, fp) != 1) {
+		pocol_error("failed to read header");
+		goto error;
+	}
+
+	if (magic_header != POCOL_MAGIC) {
+		pocol_error("wrong magic number `0x%08X`");
 		goto error;
 	}
 
@@ -78,10 +83,10 @@ int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 	return 0;
 
 error:
-	if (errno)
+	if (errno) {
 		pocol_error("%s", strerror(errno));
-
-	fprintf(stderr, "%s: error: load failed with %d\n", program_invocation_name, errno);
+		fprintf(stderr, "%s: error: load failed with %d\n", program_invocation_name, errno);
+	}
 	if (fp) fclose(fp);
 	return -1;
 }
@@ -106,7 +111,7 @@ ST_FUNC char *err_as_cstr(Err err) {
 		case ERR_ILLEGAL_INST_ACCESS:
 			return "illegal memory access";
 		default:
-			return "???";
+			return "ENOUNKNOWN";
 	}
 }
 

@@ -263,6 +263,10 @@ int pocol_compile_file(char *path, char *out)
 	if (!p.out)
 		goto error;
 
+	/* write magic */
+	uint32_t magic_header = POCOL_MAGIC;
+	fwrite(&magic_header, sizeof(uint32_t), 1, p.out);
+
 	cursor = source;
 	p.lookahead = next();
 	/* Compiling process */
