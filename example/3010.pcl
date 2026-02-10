@@ -6,4 +6,7 @@ pop r1          ; r1 = 10
 add r0, r1
 
 print r0	; expected: 30
+print r1	; expected: 10
 halt            ; Stop
+
+; expected output: 3010

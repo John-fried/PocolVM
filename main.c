@@ -24,13 +24,17 @@ int main(int argc, char **argv)
 	}
 	else if (argc == 2) {
 		PocolVM *vm;
-		pocol_load_program_into_vm(argv[1], &vm);
-		Err err = pocol_execute_program(vm, -1);
-		if (err != ERR_OK) {
-			fprintf(stderr, "\nRuntime Error: %d\n", err);
-		}
+		Err err;
 
-		pocol_free_vm(vm);
+		if (pocol_load_program_into_vm(argv[1], &vm) == 0) {
+			err = pocol_execute_program(vm, -1);
+			if (err != ERR_OK) {
+				fprintf(stderr, "\nRuntime Error: %d\n", err);
+			}
+
+			putchar('\n');
+			pocol_free_vm(vm);
+		}
 		return (int)err;
 	}
 	else {

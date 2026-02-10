@@ -20,24 +20,27 @@ ST_FUNC void pocol_error(const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
-	fprintf(stderr, "`%s`: vm.error: ", current_path);
+	fprintf(stderr, "%s: vm.error: ", current_path);
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, "\n");
 	fflush(stderr);
 }
 
 /* make and load bytecode into vm */
-void pocol_load_program_into_vm(const char *path, PocolVM **vm)
+int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 {
-	FILE *fp = fopen(path, "rb"); // read binary mode
-	if (!fp) return;
 	current_path = path;
+	errno = 0;
+
+	FILE *fp = fopen(path, "rb"); // read binary mode
+	if (!fp)
+		goto error;
 
 	fseek(fp, 0, SEEK_END);
 	long size = ftell(fp);
 	fseek(fp, 0, SEEK_SET);
 
-	if (size <= 0) {
+	if (size == 0) {
 		pocol_error("Program section is empty.");
 		goto error;
 	}
@@ -49,13 +52,10 @@ void pocol_load_program_into_vm(const char *path, PocolVM **vm)
 	}
 
 	*vm = malloc(sizeof(PocolVM));
-	if (!(*vm)) {
-		pocol_error("%s", strerror(errno));
-		fclose(fp);
-		return;
-	}
+	if (!(*vm))
+		goto error;
 
-	memset(*vm, 0, sizeof(**vm));
+	memset((*vm), 0, sizeof(**vm));
 	fread((*vm)->memory, 1, size, fp);
 	fclose(fp);
 
@@ -63,11 +63,15 @@ void pocol_load_program_into_vm(const char *path, PocolVM **vm)
 	(*vm)->halt = 0;
 	(*vm)->pc = 0;
 	(*vm)->sp = 0;
-	return;
+	return 0;
 
 error:
-	fprintf(stderr, "vm.load: failed\n");
-	fclose(fp);
+	if (errno)
+		pocol_error("%s", strerror(errno));
+
+	fprintf(stderr, "vm.load: error: terminated\n");
+	if (fp) fclose(fp);
+	return -1;
 }
 
 /* Free vm */

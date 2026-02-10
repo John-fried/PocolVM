@@ -115,6 +115,25 @@ ST_FUNC Token next(void)
 	return t;
 }
 
+ST_FUNC Token peek(int n)
+{
+	// save "before" data
+	char *saved_cursor = cursor;
+	unsigned int saved_line = line;
+	unsigned int saved_col = col;
+
+	Token t;
+
+	for (int i = 0; i < n; i++) {
+		t = next();
+	}
+
+	cursor = saved_cursor;
+	line = saved_line;
+	col = saved_col;
+	return t;
+}
+
 /*********************** Parser *****************************/
 
 ST_FUNC void parser_advance(Parser *p)
@@ -128,40 +147,6 @@ ST_FUNC void parse_inst(Parser *p)
 	Token mnemonic = p->lookahead;
 	const Inst_Def *inst = NULL;
 
-/* Example: "add r0, 5"
-
-Conflict:
-  [name] [opcode]  [operand type]
-  "add": INST_ADD  {reg, reg}
-  "add": INST_ADDI {reg, imm}
-
-table = 0;
-
-@check name: gets "add" INST_ADD
-@validate operand:
-	"add r0, 5"
-
-	operand: r0 PASSED
-	operand: 5  FAIL (imm)
-
-	jump invalid operand:
-		table = 4 (example)
-		table++; (now table = 5)
-		jump @check name 2
-
-@check name 2: gets "add" INST_ADD (table 6)
-@validate operand:
-	"add r0, 5"
-
-	operand: r0 PASSED
-	operand: 5  PASSED
-
-	input_reg = r0;
-	input_imm = 5;
-
-[ ... WRITE OPCODE LOGIC ...]
-*/
-
 search_table:
 	// search from instruction table
 	for (; table < COUNT_INST; table++) {
@@ -174,46 +159,36 @@ search_table:
 	}
 
 	if (!inst) {
-		compiler_error("`%.*s`: unknown instruction in program", mnemonic.length, mnemonic.start);
+		compiler_error("unknown `%.*s` instruction in program", mnemonic.length, mnemonic.start);
 		parser_advance(p);
 		return;
 	}
 
-	uint8_t opcode = (uint8_t)inst->type;
-	uint8_t input_reg;
-	uint32_t input_imm;
-
 	// @validate operand
-	parser_advance(p); // skip mnemonic (example: "add")
+	int match = 1;
+	Token t;
+
 	for (int i = 0; i < inst->operand; i++) {
-		if (inst->operand_type[i] == OPR_REG) {
-			if (p->lookahead.type != TOK_REGISTER)
-				goto invalid_operand;
-
-			input_reg = (uint8_t)p->lookahead.value;
-			parser_advance(p);
-		} else if (inst->operand_type[i] == OPR_IMM) {
-			if (p->lookahead.type != TOK_INT)
-				goto invalid_operand;
-
-			input_imm = (uint32_t)p->lookahead.value;
-			parser_advance(p);
-		}
+		t = peek(i + 1);
+		if (inst->operand_type[i] == OPR_REG && t.type != TOK_REGISTER) match = 0;
+		if (inst->operand_type[i] == OPR_IMM && t.type != TOK_INT) match = 0;
 	}
 
-	// emit bytecode
+	if (!match) {
+		inst = NULL;
+		table++;
+		goto search_table;
+	}
+
+	uint8_t opcode = (uint8_t)inst->type;
+	parser_advance(p); // skip mnemonic
 	fwrite(&opcode, 1, 1, p->out);
-	if (inst->operand > 0) {
-		fwrite(&input_reg, 1, 1, p->out);
-		fwrite(&input_imm, sizeof(uint32_t), 1, p->out);
+
+	for (int i = 0; i < inst->operand; i++) {
+		uint8_t val = (uint8_t)p->lookahead.value;
+		fwrite(&val, 1, 1, p->out);
+		parser_advance(p);
 	}
-
-	return;
-
-invalid_operand:
-	inst = NULL;
-	table++;
-	goto search_table;
 }
 
 int pocol_compile_file(char *path, char *out)
@@ -247,6 +222,10 @@ int pocol_compile_file(char *path, char *out)
 	munmap(source, st.st_size);
 	close(fd);
 	fclose(p.out);
+
+	// mark executable
+	chmod(out, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP
+		| S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
 	return 0;
 
 error:
