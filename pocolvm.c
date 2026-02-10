@@ -9,26 +9,65 @@
 #include "common.h"
 #include <assert.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
+
+ST_DATA const char *current_path;
+
+ST_FUNC void pocol_error(const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	fprintf(stderr, "`%s`: vm.error: ", current_path);
+	vfprintf(stderr, fmt, ap);
+	fprintf(stderr, "\n");
+	fflush(stderr);
+}
 
 /* make and load bytecode into vm */
-PocolVM *pocol_make_vm(uint8_t *bytecode, size_t size)
+void pocol_load_program_into_vm(const char *path, PocolVM **vm)
 {
-	PocolVM *vm = malloc(sizeof(PocolVM));
-	if (!vm)
-		return NULL;
+	FILE *fp = fopen(path, "rb"); // read binary mode
+	if (!fp) return;
+	current_path = path;
 
-	memset(vm, 0, sizeof(*vm));
-	if (bytecode != NULL && size <= POCOL_MEMORY_SIZE)
-		memcpy(vm->memory, bytecode, size);
+	fseek(fp, 0, SEEK_END);
+	long size = ftell(fp);
+	fseek(fp, 0, SEEK_SET);
+
+	if (size <= 0) {
+		pocol_error("Program section is empty.");
+		goto error;
+	}
+
+	if (size > POCOL_MEMORY_SIZE) {
+		pocol_error("Program section is too big. This file contains %ld instructions. But the capacity is %d",
+			size, POCOL_MEMORY_SIZE);
+		goto error;
+	}
+
+	*vm = malloc(sizeof(PocolVM));
+	if (!(*vm)) {
+		pocol_error("%s", strerror(errno));
+		fclose(fp);
+		return;
+	}
+
+	memset(*vm, 0, sizeof(**vm));
+	fread((*vm)->memory, 1, size, fp);
+	fclose(fp);
 
 	/* Set initial valuee */
-	vm->halt = 0;
-	vm->pc = 0;
-	vm->sp = 0;
+	(*vm)->halt = 0;
+	(*vm)->pc = 0;
+	(*vm)->sp = 0;
+	return;
 
-	return vm;
+error:
+	fprintf(stderr, "vm.load: failed\n");
+	fclose(fp);
 }
 
 /* Free vm */
@@ -38,12 +77,31 @@ void pocol_free_vm(PocolVM *vm)
 	free(vm);
 }
 
-Err pocol_run_program(PocolVM *vm, int limit)
+ST_FUNC char *err_as_cstr(Err err) {
+	switch (err) {
+		case ERR_OK:
+			return "OK";
+		case ERR_STACK_OVERFLOW:
+			return "stack overflow";
+		case ERR_STACK_UNDERFLOW:
+			return "stack underflow";
+		case ERR_ILLEGAL_INST:
+			return "unrecognized opcode";
+		case ERR_ILLEGAL_INST_ACCESS:
+			return "illegal memory access";
+		default:
+			return "???";
+	}
+}
+
+Err pocol_execute_program(PocolVM *vm, int limit)
 {
 	while (limit != 0 && !vm->halt) {
-		Err err = pocol_run_inst(vm);
-		if (err != ERR_OK)
+		Err err = pocol_execute_inst(vm);
+		if (err != ERR_OK) {
+			pocol_error("%d: %s", vm->memory[vm->pc], err_as_cstr(err));
 			return err;
+		}
 		if (limit > 0)
 			--limit;
 	}
@@ -51,17 +109,13 @@ Err pocol_run_program(PocolVM *vm, int limit)
 	return ERR_OK;
 }
 
-Err pocol_run_inst(PocolVM *vm)
+Err pocol_execute_inst(PocolVM *vm)
 {
 	if (vm->pc >= POCOL_MEMORY_SIZE)
 		return ERR_ILLEGAL_INST_ACCESS;
 
 	#define REG_OP(operand) (operand & 0x07)
-
-	#define CIR      (vm->memory[vm->pc]) /* CIR Value */
-	#define PEEK(n)  (vm->memory[vm->pc + (n)]) /* take CIR(n) without incrementing CIR */
-	#define NEXT     (vm->memory[vm->pc++])	/* take CIR then next CIR */
-	#define NNEXT(n) (vm->memory[vm->pc += (n)]) /* take CIR(n) */
+	#define NEXT (vm->memory[vm->pc++])
 
 	uint8_t op = NEXT;
 	switch (op) {

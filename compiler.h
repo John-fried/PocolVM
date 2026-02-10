@@ -7,13 +7,12 @@
 #define POCOL_COMPILER_H
 
 #include <stdint.h>
+#include <stdio.h>
 
 typedef enum {
 	TOK_EOF = 0,
 	TOK_INT,
-	TOK_COMMA,
-	TOK_ERROR,
-	TOK_COMMENT,
+	TOK_ILLEGAL,
 	TOK_IDENT, // identifier
 	TOK_REGISTER, // register (prefix: 'r')
 } TokenType;
@@ -24,5 +23,12 @@ typedef struct {
 	unsigned int length;
 	int32_t value; // if tok == TOK_INT
 } Token;
+
+typedef struct {
+	Token lookahead;
+	FILE *out;
+} Parser;
+
+int pocol_compile_file(char *path, char *out);
 
 #endif // POCOL_COMPILER_H

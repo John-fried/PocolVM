@@ -58,9 +58,9 @@ typedef struct {
 	unsigned int halt : 1;			/* halt status */
 } PocolVM;
 
-PocolVM *pocol_make_vm(uint8_t *bytecode, size_t size);
+void pocol_load_program_into_vm(const char *path, PocolVM **vm);
 void pocol_free_vm(PocolVM *vm);
-Err pocol_run_program(PocolVM *vm, int limit);
-Err pocol_run_inst(PocolVM *vm);
+Err pocol_execute_program(PocolVM *vm, int limit);
+Err pocol_execute_inst(PocolVM *vm);
 
 #endif /* POCOL_POCOLVM_H */

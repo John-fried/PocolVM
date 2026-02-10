@@ -28,8 +28,9 @@ const Inst_Def inst_table[COUNT_INST] = {
 ST_DATA char *source_file;
 ST_DATA char *source;
 ST_DATA char *cursor;
-ST_DATA int line = 1;
-ST_DATA int col = 0;
+ST_DATA unsigned int line = 1;
+ST_DATA unsigned int col = 1;
+ST_DATA unsigned int error_count = 0;
 
 /*------------------------------------------------*/
 
@@ -37,164 +38,215 @@ ST_FUNC void compiler_error(const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
-	fprintf(stderr, "%s:%d:%d: \x1b[31merror\x1b[0m: ", source_file, line, col);
+	fprintf(stderr, "\x1b[1m%s:%d:%d: \x1b[31merror:\x1b[0m ", source_file, line, col);
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, "\n");
 	fflush(stderr);
+	error_count++;
 }
 
-ST_FUNC void advance(void)
+/********************** Lexer *************************/
+
+ST_FUNC void consume(void)
 {
 	if (*cursor == '\0')
 		return;
 
-	if (*cursor == '\n')
+	if (*cursor == '\n') {
 		line++;
+		col = 1;
+	}
 	else
 		col++;
 	cursor++;
 }
 
-ST_INLN int isnumeric(char *s)
+ST_FUNC Token next(void)
 {
-	if (*s == '\0') return 0;
-	if (*s == '-' && isdigit(*(s + 1))) s += 2;
+	while (*cursor != '\0') {
+		if (isspace((unsigned char)*cursor) || *cursor == ',')
+			consume();
+		else if (*cursor == ';')
+			while (*cursor != '\n' && *cursor != '\0') consume();
+		else
+			break;
+	}
 
-	while (*s)
-		if (!isdigit(*s++)) return 0;
+	Token t = { .start = cursor, .length = 0, .value = 0, .type = TOK_ILLEGAL};
 
-	return 1;
-}
+	if (*cursor == '\0') {
+		t.type = TOK_EOF;
+		return t;
+	}
 
-Token next(void)
-{
-	while (*cursor != '\0' && isspace((unsigned char)*cursor))
-		advance();
-
-	Token t;
-	t.type = TOK_ERROR;
-	t.start = cursor;
-
-	if (*cursor == '\0')
-		return (Token){TOK_EOF, cursor, 0, 0};
-
-	if (*cursor == ',')
-		return (Token){TOK_COMMA, cursor, 0, 1};
-
-	if (isnumeric(cursor)) {
+	if (isdigit((unsigned char)*cursor) || (*cursor == '-' &&
+	    isdigit((unsigned char)*(cursor + 1)))) {
 		t.type = TOK_INT;
-		t.value = atoi(cursor);
+		char *end;
+		errno = 0;
+		t.value = strtol(cursor, &end, 10);
+		t.length = end - cursor;
+		if (errno == ERANGE)
+			compiler_error("Integrer out of range");
+		for (unsigned int i=0;i < t.length;i++)
+			consume();
+		return t;
 	}
 
-	if (*cursor == ';')
-		t.type = TOK_COMMENT;
+	if (isalpha((unsigned char)*cursor)) {
+		char *start = cursor;
+		while (isalnum((unsigned char)*cursor) || *cursor == '_')
+			consume();
 
-	if (isalpha(*cursor)) {
-		while (isalnum(*cursor))
-			advance();
-		t.length = (int)(cursor - t.start);
+		t.length = cursor - start;
 		t.type = TOK_IDENT;
-		// r0,r1,r2....
-		if (t.start[0] == 'r' && isdigit(t.start[1])) {
+
+		// check if register
+		if (start[0] == 'r' && isdigit(start[1])) {
 			t.type = TOK_REGISTER;
-			t.value = t.start[1] - '0';
+			t.value = atoi(start + 1);
 		}
+
+		return t;
 	}
 
+	compiler_error("Illegal character '%c' in program", *cursor);
+	consume();
 	return t;
 }
 
-// TODO: Refractor this into more modular function or more cleaner logic
-// NOTE: use ST_INLN (static inline) for optimizing speed if you want to seperate the logic into smaller function
-int compile_file(char *path, char *out)
+/*********************** Parser *****************************/
+
+ST_FUNC void parser_advance(Parser *p)
 {
-	source_file = path;
-	int fd = open(path, O_RDONLY);
+	p->lookahead = next();
+}
 
-	if (fd < 0)
-		goto error;
+ST_FUNC void parse_inst(Parser *p)
+{
+	unsigned int table = 0;
+	Token mnemonic = p->lookahead;
+	const Inst_Def *inst = NULL;
 
-	struct stat st;
-	if (fstat(fd, &st) < 0)
-		goto error;
+/* Example: "add r0, 5"
 
-	source = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-	if (source == MAP_FAILED)
-		goto error;
+Conflict:
+  [name] [opcode]  [operand type]
+  "add": INST_ADD  {reg, reg}
+  "add": INST_ADDI {reg, imm}
 
-	/* output file */
-	FILE *outfd = fopen(out, "wb"); // write binary mode
+table = 0;
 
-	if (!outfd) {
-		compiler_error("can't open %s", out);
-		goto cleanup;
+@check name: gets "add" INST_ADD
+@validate operand:
+	"add r0, 5"
+
+	operand: r0 PASSED
+	operand: 5  FAIL (imm)
+
+	jump invalid operand:
+		table = 4 (example)
+		table++; (now table = 5)
+		jump @check name 2
+
+@check name 2: gets "add" INST_ADD (table 6)
+@validate operand:
+	"add r0, 5"
+
+	operand: r0 PASSED
+	operand: 5  PASSED
+
+	input_reg = r0;
+	input_imm = 5;
+
+[ ... WRITE OPCODE LOGIC ...]
+*/
+
+search_table:
+	// search from instruction table
+	for (; table < COUNT_INST; table++) {
+		// @check name
+		if (strncmp(inst_table[table].name, mnemonic.start, mnemonic.length) == 0 &&
+			strlen(inst_table[table].name) == mnemonic.length) {
+			inst = &inst_table[table];
+			break;
+		}
 	}
 
-	/* compile progress */
-	Token mnemonic = next();
-	Token operands[POCOL_OPERAND_MAX];
-	int op_count = 0;
+	if (!inst) {
+		compiler_error("`%.*s`: unknown instruction in program", mnemonic.length, mnemonic.start);
+		parser_advance(p);
+		return;
+	}
 
-next_instruction:
-	while (mnemonic.type != TOK_EOF) {
-		if (mnemonic.type != TOK_IDENT) {
-			mnemonic = next();
+	uint8_t opcode = (uint8_t)inst->type;
+	uint8_t input_reg;
+	uint32_t input_imm;
+
+	// @validate operand
+	parser_advance(p); // skip mnemonic (example: "add")
+	for (int i = 0; i < inst->operand; i++) {
+		if (inst->operand_type[i] == OPR_REG) {
+			if (p->lookahead.type != TOK_REGISTER)
+				goto invalid_operand;
+
+			input_reg = (uint8_t)p->lookahead.value;
+			parser_advance(p);
+		} else if (inst->operand_type[i] == OPR_IMM) {
+			if (p->lookahead.type != TOK_INT)
+				goto invalid_operand;
+
+			input_imm = (uint32_t)p->lookahead.value;
+			parser_advance(p);
+		}
+	}
+
+	// emit bytecode
+	fwrite(&opcode, 1, 1, p->out);
+	if (inst->operand > 0) {
+		fwrite(&input_reg, 1, 1, p->out);
+		fwrite(&input_imm, sizeof(uint32_t), 1, p->out);
+	}
+
+	return;
+
+invalid_operand:
+	inst = NULL;
+	table++;
+	goto search_table;
+}
+
+int pocol_compile_file(char *path, char *out)
+{
+	struct stat st;
+	int fd = open(path, O_RDONLY);
+	Parser p;
+	source_file = path;
+
+	if (fd < 0) goto error;
+	if (fstat(fd, &st) < 0) goto error;
+
+	source = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (source == MAP_FAILED) goto error;
+
+	p.out = fopen(out, "wb");
+	if (!p.out) goto error;
+
+	cursor = source;
+	p.lookahead = next();
+	/* Compiling process */
+	while (p.lookahead.type != TOK_EOF) {
+		if (p.lookahead.type == TOK_IDENT) {
+			parse_inst(&p);
 			continue;
 		}
 
-		// take operand
-		while (op_count < POCOL_OPERAND_MAX) {
-			Token t = next();
-			if (t.type == TOK_COMMA) t = next(); // skip comma
-			if (t.type == TOK_COMMENT) {
-				while (*cursor != '\n')
-					advance();
-				t = next();
-			}
-
-			if (t.type == TOK_REGISTER || t.type == TOK_INT)
-				operands[op_count++] = t;
-			else
-				break; // no more operands
-		}
-
-		// search for instruction in the table
-		const Inst_Def *curr_table;
-		for (int i = 0; i < COUNT_INST; i++) {
-			curr_table = &inst_table[i];
-			if (strncmp(curr_table->name, mnemonic.start, mnemonic.length) == 0 &&
-				strlen(curr_table->name) == mnemonic.length &&
-				op_count == curr_table->operand) {
-				// check operands types
-				int match = 1;
-				OperandType expected;
-				for (int j = 0; j < op_count; j++) {
-					expected = curr_table->operand_type[j];
-					if (expected == OPR_REG && mnemonic.type != TOK_REGISTER) match = 0;
-					if (expected == OPR_IMM && mnemonic.type != TOK_INT) match = 0;
-				}
-
-				if (match) {
-					uint8_t opcode = (uint8_t )curr_table->type;
-					fwrite(&opcode, 1, 1, outfd);
-
-					for (int j = 0; j < op_count; j++) {
-						opcode = (uint8_t)operands[j].value;
-						fwrite(&opcode, 1, 1, outfd);
-					}
-					op_count = 0;
-					goto next_instruction;
-				}
-			}
-		}
-
-		compiler_error("instruction '%s' not found in instruction table");
+		parser_advance(&p);
 	}
 
-cleanup:
 	munmap(source, st.st_size);
 	close(fd);
-	if (outfd) fclose(outfd);
+	fclose(p.out);
 	return 0;
 
 error:

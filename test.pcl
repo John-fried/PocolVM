@@ -1,0 +1,9 @@
+push 10         ; 10 to stack
+push 20         ; 20 to stack
+
+pop r0          ; r0 = 20
+pop r1          ; r1 = 10
+add r0, r1
+
+print r0	; expected: 30
+halt            ; Stop

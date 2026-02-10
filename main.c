@@ -1,46 +1,40 @@
-/* main.c -- The entry point of Pocol */
-
-/* Copyright (C) 2026 Bayu Setiawan
-   This file is part of Pocol, the Pocol Virtual Machine.
-   SPDX-License-Identifier: MIT
-*/
-
 #include <stdio.h>
-#include <stdint.h>
+#include <string.h>
+#include <stdlib.h>
 #include "pocolvm.h"
+#include "compiler.h"
 
-int main(void)
+void print_usage()
 {
-	/* * PocolVM Test Program:
-	 * 1. Push 10 and 20 to stack
-	 * 2. Pop them into R0 and R1
-	 * 3. Add R0 + R1, result in R0
-	 * 4. Print R0
-	 */
-	uint8_t program[] = {
-		INST_PUSH, 10,	/* Stack: [10] */
-		INST_PUSH, 20,	/* Stack: [10, 20] */
-		INST_POP, 0,	/* R0 = 20, Stack: [10] */
-		INST_POP, 1,	/* R1 = 10, Stack: [] */
-		INST_ADD, 0, 1,	/* R0 = R0 + R1 (30) */
-		INST_PRINT, 0,	/* Output R0 */
-		INST_HALT	/* Stop execution */
-	};
+	printf("Usage:\n");
+	printf("  Run binary:       pocol <file_binary>\n");
+	printf("  COmpile source:   pocol compile <file_source.pcl>\n");
+}
 
-	/* Initialize VM and load bytecode */
-	PocolVM *vm = pocol_make_vm(program, sizeof(program));
-	if (!vm) {
-		fprintf(stderr, "Error: Failed create VM\n");
+int main(int argc, char **argv)
+{
+	if (argc == 3 && strcmp(argv[1], "compile") == 0) {
+		char *input_path = argv[2];
+		char *output_path = "out.pob";	// .pob = Pocol Binary
+
+		if (pocol_compile_file(input_path, output_path) == 0)
+			return 0;
+		else
+			return 1;
+	}
+	else if (argc == 2) {
+		PocolVM *vm;
+		pocol_load_program_into_vm(argv[1], &vm);
+		Err err = pocol_execute_program(vm, -1);
+		if (err != ERR_OK) {
+			fprintf(stderr, "\nRuntime Error: %d\n", err);
+		}
+
+		pocol_free_vm(vm);
+		return (int)err;
+	}
+	else {
+		print_usage();
 		return 1;
 	}
-
-	printf("Expected: 30\nResult: ");
-	Err err = pocol_run_program(vm, -1);	/* run with no limit (-1) */
-	putchar('\n');	/* explicit newline */
-
-	if (err != ERR_OK) {
-		fprintf(stderr, "\nVM Execution Error: %d\n", err);
-	}
-	pocol_free_vm(vm);
-	return (int)err;
 }
