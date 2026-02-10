@@ -13,15 +13,15 @@ typedef enum {
 	TOK_EOF = 0,
 	TOK_INT,
 	TOK_ILLEGAL,
-	TOK_IDENT, // identifier
-	TOK_REGISTER, // register (prefix: 'r')
+	TOK_IDENT, /* identifier */
+	TOK_REGISTER, /* register (prefix: 'r') */
 } TokenType;
 
 typedef struct {
 	TokenType type;
 	const char *start;
 	unsigned int length;
-	int32_t value; // if tok == TOK_INT
+	int32_t value; /* if tok == TOK_INT */
 } Token;
 
 typedef struct {
@@ -31,4 +31,4 @@ typedef struct {
 
 int pocol_compile_file(char *path, char *out);
 
-#endif // POCOL_COMPILER_H
+#endif /* POCOL_COMPILER_H */

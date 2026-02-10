@@ -16,7 +16,7 @@ int main(int argc, char **argv)
 {
 	if (argc == 3 && strcmp(argv[1], "compile") == 0) {
 		char *input_path = argv[2];
-		char *output_path = "out.pob";	// .pob = Pocol Binary
+		char *output_path = "out.pob";	/* .pob = Pocol Binary */
 
 		if (pocol_compile_file(input_path, output_path) == 0)
 			return 0;
