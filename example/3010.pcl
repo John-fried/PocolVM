@@ -1,5 +1,5 @@
 push 10         ; 10 to stack
-push 20         ; 20 to stack
+push 20         ; 20 to stack: [10, 20]
 
 pop r0          ; r0 = 20
 pop r1          ; r1 = 10

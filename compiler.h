@@ -21,7 +21,7 @@ typedef struct {
 	TokenType type;
 	const char *start;
 	unsigned int length;
-	int32_t value; /* if tok == TOK_INT */
+	int64_t value; /* if tok == TOK_INT */
 } Token;
 
 typedef struct {

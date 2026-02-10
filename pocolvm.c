@@ -16,6 +16,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <unistd.h>
 
 ST_DATA const char *current_path;
@@ -124,6 +125,19 @@ Err pocol_execute_program(PocolVM *vm, int limit)
 	return ERR_OK;
 }
 
+ST_INLN uint64_t pocol_fetch64(PocolVM *vm)
+{
+	if (vm->pc + 8 >= POCOL_MEMORY_SIZE) {
+		pocol_error("fetch-failed: %s", err_as_cstr(ERR_ILLEGAL_INST_ACCESS));
+		exit(ERR_ILLEGAL_INST_ACCESS);
+	}
+
+	uint64_t val;
+	memcpy(&val, &vm->memory[vm->pc], sizeof(uint64_t));
+	vm->pc += 8;
+	return val;
+}
+
 Err pocol_execute_inst(PocolVM *vm)
 {
 	if (vm->pc >= POCOL_MEMORY_SIZE)
@@ -140,7 +154,7 @@ Err pocol_execute_inst(PocolVM *vm)
 
 		case INST_PUSH:
 			if (vm->sp >= POCOL_STACK_SIZE) return ERR_STACK_OVERFLOW;
-			vm->stack[vm->sp++] = NEXT;
+			vm->stack[vm->sp++] = pocol_fetch64(vm);
 			break;
 
 		case INST_POP:
@@ -149,13 +163,13 @@ Err pocol_execute_inst(PocolVM *vm)
 			break;
 
 		case INST_ADD: {
-			uint32_t dest = REG_OP(NEXT);
-			uint32_t src = REG_OP(NEXT);
+			uint8_t dest = REG_OP(NEXT);
+			uint8_t src = REG_OP(NEXT);
 			vm->registers[dest] += vm->registers[src];
 		} break;
 
 		case INST_PRINT: /* (for debugging) */
-			printf("%d", vm->registers[REG_OP(NEXT)]);
+			printf("%" PRIu64 "", vm->registers[REG_OP(NEXT)]);
 			break;
 
 		default:

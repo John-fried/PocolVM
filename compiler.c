@@ -155,6 +155,17 @@ ST_FUNC Token peek(int n)
 	return t;
 }
 
+/******************** Pocol Compiler ************************/
+
+ST_FUNC void pocol_write64(FILE *out, uint64_t val)
+{
+	uint8_t bytes[8];
+	for (int i = 0; i<8; i++)
+		bytes[i] = (val >> (i * 8)) & 0xFF;
+
+	fwrite(bytes, 1, 8, out);
+}
+
 /*********************** Parser *****************************/
 
 /* take the next token from cursor and store it into parser lookahead */
@@ -218,9 +229,16 @@ search_table:
 	fwrite(&opcode, 1, 1, p->out);
 
 	for (int i = 0; i < inst->operand; i++) {
-		uint8_t val = (uint8_t)p->lookahead.value;
-		fwrite(&val, 1, 1, p->out);
-		parser_advance(p);
+		uint64_t val = (uint64_t)p->lookahead.value;
+		parser_advance(p); // skip val
+
+		if (inst->operand_type[i] == OPR_REG) {
+			uint8_t reg  = (uint8_t)val;
+			fwrite(&reg, 1, 1, p->out);
+			continue;
+		}
+
+		pocol_write64(p->out, val);
 	}
 }
 
