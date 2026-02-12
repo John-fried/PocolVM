@@ -16,20 +16,16 @@
 /* instruction table */
 const Inst_Def inst_table[COUNT_INST] = {
     [INST_HALT]  = { .type = INST_HALT,  .name = "halt", .operand = 0 },
-    [INST_PUSH]  = { .type = INST_PUSH,  .name = "push", .operand = 1,
-    			.operand_type = {OPR_IMM} },
-    [INST_POP]   = { .type = INST_POP,   .name = "pop", .operand = 1,
-    			.operand_type = {OPR_REG} },
-    [INST_ADD]   = { .type = INST_ADD,   .name = "add", .operand = 2,
-    			.operand_type = {OPR_REG, OPR_REG} },
-    [INST_PRINT] = { .type = INST_PRINT, .name = "print", .operand = 1,
-    			.operand_type = {OPR_REG} },
+    [INST_PUSH]  = { .type = INST_PUSH,  .name = "push", .operand = 1, },
+    [INST_POP]   = { .type = INST_POP,   .name = "pop", .operand = 1, },
+    [INST_ADD]   = { .type = INST_ADD,   .name = "add", .operand = 2, },
+    [INST_PRINT] = { .type = INST_PRINT, .name = "print", .operand = 1, },
 };
 
 /* -- global variable -- */
 ST_DATA char *source_file;
 ST_DATA char *source;
-ST_DATA char *cursor;
+ST_DATA char *cursor = NULL;
 ST_DATA unsigned int line = 1;
 ST_DATA unsigned int col = 1;
 ST_DATA unsigned int error_count = 0;
@@ -49,8 +45,9 @@ ST_FUNC void compiler_error(const char *fmt, ...)
 	fflush(stderr);
 	error_count++;
 
-	/* skip until newline (one line, one error -- prevent garbage error from one line) */
-	while (*cursor != '\n' && *cursor != '\0') consume();
+	if (cursor)
+		/* skip until newline (one line, one error -- prevent garbage error from one line) */
+		while (*cursor != '\n' && *cursor != '\0') consume();
 }
 
 /********************** Lexer *************************/
@@ -119,9 +116,10 @@ ST_FUNC Token next(void)
 		t.type = TOK_IDENT;
 
 		/* check if register */
-		if (start[0] == 'r' && isdigit(start[1])) {
+		if (start[0] == 'r') {
 			t.type = TOK_REGISTER;
-			t.value = atoi(start + 1);
+			if (isdigit(start[1]))
+				t.value = atoi(start + 1);
 		}
 
 		return t;
@@ -145,7 +143,7 @@ ST_FUNC Token peek(int n)
 
 	Token t;
 
-	for (int i = 0; i < n; i++) {
+	for (int i = 0; i < (n + 1); i++) {
 		t = next();
 	}
 
@@ -159,6 +157,8 @@ ST_FUNC Token peek(int n)
 
 ST_FUNC void pocol_write64(FILE *out, uint64_t val)
 {
+	/* Serialize 64-bit value into 8 bytes using Little-Endian order */
+	/* stackoverflow.com/questions/69968061/how-do-i-split-an-unsigned-64-bit-int-into-individual-8-bits-little-endian-in */
 	uint8_t bytes[8];
 	for (int i = 0; i<8; i++)
 		bytes[i] = (val >> (i * 8)) & 0xFF;
@@ -177,24 +177,20 @@ ST_FUNC void parser_advance(Parser *p)
 /* parse instruction, the compiler core -- using the Instruction Set Architecture (ISA)
    it will do the following thing:
    - search if instruction is in the table,
-   - check the operand count && operand types to prevent from conflict cases like:
-     - "add": INST_ADD, operand: {reg,reg}
-     - "add": INST_ADDI, operand: {reg,imm} (immidiate value)
-   - and then write the mnemonic opcode, and the operand opcode if all procedure passed
+   - check the operand count && operand types,
+   - write the mnemonic opcode && write the operand opcode
 */
 ST_FUNC void parse_inst(Parser *p)
 {
-	unsigned int table = 0;
 	Token mnemonic = p->lookahead;
 	const Inst_Def *inst = NULL;
 
-search_table:
 	/* search from instruction table */
-	for (; table < COUNT_INST; table++) {
+	for (int i = 0; i < COUNT_INST; i++) {
 		/* @check name */
-		if (strncmp(inst_table[table].name, mnemonic.start, mnemonic.length) == 0 &&
-			strlen(inst_table[table].name) == mnemonic.length) {
-			inst = &inst_table[table];
+		if (strncmp(inst_table[i].name, mnemonic.start, mnemonic.length) == 0 &&
+			strlen(inst_table[i].name) == mnemonic.length) {
+			inst = &inst_table[i];
 			break;
 		}
 	}
@@ -205,35 +201,28 @@ search_table:
 		return;
 	}
 
-	/* validate operand */
-	int match = 1;
-	Token t;
-
+	/* Create operand descriptor */
+	OperandType types[2] = {OPR_NONE, OPR_NONE};
 	for (int i = 0; i < inst->operand; i++) {
-		t = peek(i + 1);
-		/* check if the operand is suitable with the next token */
-		if (inst->operand_type[i] == OPR_REG && t.type != TOK_REGISTER) match = 0;
-		if (inst->operand_type[i] == OPR_IMM && t.type != TOK_INT) match = 0;
+		Token t = peek(i);
+		if (t.type == TOK_REGISTER) types[i] = OPR_REG;
+		else if (t.type == TOK_INT) types[i] = OPR_IMM;
 	}
 
-	/* if no match increment table to continue searching again from the next table */
-	if (!match) {
-		inst = NULL;
-		table++;
-		goto search_table;
-	}
-
-	/* write opcode */
+	/* write opcode & byte descriptor */
 	uint8_t opcode = (uint8_t)inst->type;
+	uint8_t desc = DESC_PACK(types[0], types[1]);
+
 	parser_advance(p); /* skip mnemonic */
 	fwrite(&opcode, 1, 1, p->out);
+	fwrite(&desc, 1, 1, p->out); /* write descriptor for operand */
 
 	for (int i = 0; i < inst->operand; i++) {
 		uint64_t val = (uint64_t)p->lookahead.value;
-		parser_advance(p); // skip val
+		parser_advance(p); /* skip val */
 
-		if (inst->operand_type[i] == OPR_REG) {
-			uint8_t reg  = (uint8_t)val;
+		if (types[i] == OPR_REG) {
+			uint8_t reg = (uint8_t)val;
 			fwrite(&reg, 1, 1, p->out);
 			continue;
 		}
@@ -283,6 +272,13 @@ int pocol_compile_file(char *path, char *out)
 	munmap(source, st.st_size);
 	close(fd);
 	fclose(p.out);
+
+	if (error_count > 0) {
+		cursor = NULL; /* prevent <segfault> */
+		compiler_error("Compilation failed. (%d total errors)", error_count);
+		unlink(tempfile);
+		return -1;
+	}
 
 	/* move tempfile to cwd output */
 	if (rename(tempfile, out) < 0) {

@@ -8,7 +8,7 @@
 #ifndef POCOL_POCOLVM_H
 #define POCOL_POCOLVM_H
 
-#define POCOL_MAGIC         0x4F434F50
+#define POCOL_MAGIC         0x6f636f70  /* 'o' 'c' 'o' 'p' reversed can be seen using 'cat' */
 #define POCOL_MAGIC_SIZE    4
 #define POCOL_OPERAND_MAX	2
 #define POCOL_MEMORY_SIZE	(640 * 1000)
@@ -28,10 +28,14 @@ typedef enum {
 typedef uint64_t Inst_Addr;
 typedef uint64_t Stack_Addr;
 
+#define DESC_PACK(op1, op2) (((op2) << 4) | (op1))  /* pack descriptor operand 1 & 2*/
+#define DESC_GET_OP1(desc)  ((desc) & 0x0F)         /* get operand 1*/
+#define DESC_GET_OP2(desc)  ((desc) >> 4)           /* get operand 2*/
+
 typedef enum {
     OPR_NONE = 0,
-    OPR_REG,    /* Register (r0-r7) */
-    OPR_IMM,    /* Immediate/Integer (5, 100) */
+    OPR_REG = 0x0001,    /* Register (r0-r7) */
+    OPR_IMM = 0x0002,    /* Immediate/Integer (5, 100) */
 } OperandType;
 
 typedef enum {
@@ -46,8 +50,7 @@ typedef enum {
 typedef struct {
     Inst_Type type;
     const char *name;
-    int operand;
-    OperandType operand_type[POCOL_OPERAND_MAX];
+    int operand; /* operand count */
 } Inst_Def;
 
 typedef struct {

@@ -115,6 +115,8 @@ ST_FUNC char *err_as_cstr(Err err) {
 	}
 }
 
+/********************** Executor ************************/
+
 Err pocol_execute_program(PocolVM *vm, int limit)
 {
 	while (limit != 0 && !vm->halt) {
@@ -130,10 +132,14 @@ Err pocol_execute_program(PocolVM *vm, int limit)
 	return ERR_OK;
 }
 
+#define REG_OP(operand) (operand & 0x07) /* get register index from operand */
+#define NEXT (vm->memory[vm->pc++])
+
+/* pocol_fetch64 -- utility to fetch 64 bit value from 8bit next memory */
 ST_INLN uint64_t pocol_fetch64(PocolVM *vm)
 {
 	if (vm->pc + 8 >= POCOL_MEMORY_SIZE) {
-		pocol_error("fetch-failed: %s", err_as_cstr(ERR_ILLEGAL_INST_ACCESS));
+		pocol_error("fetch: %s", err_as_cstr(ERR_ILLEGAL_INST_ACCESS));
 		exit(ERR_ILLEGAL_INST_ACCESS);
 	}
 
@@ -143,15 +149,23 @@ ST_INLN uint64_t pocol_fetch64(PocolVM *vm)
 	return val;
 }
 
+ST_INLN uint64_t pocol_fetch_operand(PocolVM *vm, uint8_t type)
+{
+	if (type == OPR_REG) return vm->registers[REG_OP(NEXT)];
+	if (type == OPR_IMM) return pocol_fetch64(vm);
+	return 0;
+}
+
 Err pocol_execute_inst(PocolVM *vm)
 {
 	if (vm->pc >= POCOL_MEMORY_SIZE)
 		return ERR_ILLEGAL_INST_ACCESS;
 
-	#define REG_OP(operand) (operand & 0x07)
-	#define NEXT (vm->memory[vm->pc++])
-
 	uint8_t op = NEXT;
+	uint8_t desc = NEXT; /* take byte descriptor */
+	uint8_t op1 = DESC_GET_OP1(desc);
+	uint8_t op2 = DESC_GET_OP2(desc);
+
 	switch (op) {
 		case INST_HALT:
 			vm->halt = 1;
@@ -159,7 +173,7 @@ Err pocol_execute_inst(PocolVM *vm)
 
 		case INST_PUSH:
 			if (vm->sp >= POCOL_STACK_SIZE) return ERR_STACK_OVERFLOW;
-			vm->stack[vm->sp++] = pocol_fetch64(vm);
+			vm->stack[vm->sp++] = pocol_fetch_operand(vm, op1);
 			break;
 
 		case INST_POP:
@@ -168,13 +182,13 @@ Err pocol_execute_inst(PocolVM *vm)
 			break;
 
 		case INST_ADD: {
-			uint8_t dest = REG_OP(NEXT);
-			uint8_t src = REG_OP(NEXT);
-			vm->registers[dest] += vm->registers[src];
+			uint64_t *dest = &vm->registers[REG_OP(NEXT)];
+			uint64_t src = pocol_fetch_operand(vm, op2); /* fetch next operand */
+			*dest += src;
 		} break;
 
 		case INST_PRINT: /* (for debugging) */
-			printf("%" PRIu64 "", vm->registers[REG_OP(NEXT)]);
+			printf("%" PRIu64 "", pocol_fetch_operand(vm, op1));
 			break;
 
 		default:
