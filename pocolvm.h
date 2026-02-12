@@ -29,13 +29,13 @@ typedef uint64_t Inst_Addr;
 typedef uint64_t Stack_Addr;
 
 #define DESC_PACK(op1, op2) (((op2) << 4) | (op1))  /* pack descriptor operand 1 & 2*/
-#define DESC_GET_OP1(desc)  ((desc) & 0x0F)         /* get operand 1*/
+#define DESC_GET_OP1(desc)  ((desc) & 0x0F)         /* get operand 1; 0x0F: 0000 1111 */
 #define DESC_GET_OP2(desc)  ((desc) >> 4)           /* get operand 2*/
 
 typedef enum {
     OPR_NONE = 0,
-    OPR_REG = 0x0001,    /* Register (r0-r7) */
-    OPR_IMM = 0x0002,    /* Immediate/Integer (5, 100) */
+    OPR_REG = 0x01,    /* Register (r0-r7) */
+    OPR_IMM = 0x02,    /* Immediate/Integer (5, 100) */
 } OperandType;
 
 typedef enum {

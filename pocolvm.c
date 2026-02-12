@@ -52,17 +52,6 @@ int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 		goto error;
 	}
 
-	uint32_t magic_header;
-	if (fread(&magic_header, sizeof(uint32_t), 1, fp) != 1) {
-		pocol_error("failed to read header");
-		goto error;
-	}
-
-	if (magic_header != POCOL_MAGIC) {
-		pocol_error("wrong magic number `0x%08X`");
-		goto error;
-	}
-
 	if (size > POCOL_MEMORY_SIZE) {
 		pocol_error("size exceeds limit: %ld/%d bytes", size, POCOL_MEMORY_SIZE);
 		goto error;
@@ -72,17 +61,26 @@ int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 	if (!(*vm))
 		goto error;
 
+	uint32_t magic_header; /* 4 bit magic header */
+
 	memset((*vm), 0, sizeof(**vm));
 	fread((*vm)->memory, 1, size, fp);
+	memcpy(&magic_header, (*vm)->memory, sizeof(uint32_t));
+
+	if (magic_header != POCOL_MAGIC) {
+		pocol_error("wrong magic number `0x%08X`", magic_header);
+		goto error;
+	}
 	fclose(fp);
 
 	/* Set initial valuee */
 	(*vm)->halt = 0;
-	(*vm)->pc = 0;
+	(*vm)->pc = 4; /* skip magic_header */
 	(*vm)->sp = 0;
 	return 0;
 
 error:
+	if (vm) pocol_free_vm(*vm);
 	if (errno) {
 		pocol_error("%s", strerror(errno));
 		fprintf(stderr, "%s: error: load failed with %d\n", program_invocation_name, errno);
