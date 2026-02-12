@@ -1,4 +1,6 @@
 out.pob
-pocol
+posm
+pm
 *.o
+*.d
 diff.txt
