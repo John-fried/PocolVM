@@ -27,7 +27,7 @@ const Inst_Def inst_table[COUNT_INST] = {
 ST_DATA char *source_file = NULL;
 ST_DATA char *source;
 ST_DATA char *cursor = NULL;
-ST_DATA unsigned int line = 1;
+ST_DATA unsigned int line = 0;
 ST_DATA unsigned int col = 1;
 ST_DATA unsigned int error_count = 0;
 
@@ -42,7 +42,13 @@ void compiler_error(const char *fmt, ...)
 
 	va_list ap;
 	va_start(ap, fmt);
-	fprintf(stderr, "\x1b[1m%s:%d:%d: \x1b[31merror:\x1b[0m ", source_file, line, col);
+
+	/* Print prefix */
+	fprintf(stderr, "\x1b[1m%s:", source_file);
+	if (line > 0)
+		fprintf(stderr, "%d:%d:", line, col);
+	fprintf(stderr, " \x1b[31merror\x1b[0m: ");
+
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, "\n");
 	fflush(stderr);
@@ -259,8 +265,11 @@ int pocol_compile_file(char *path, char *out)
 	uint32_t magic_header = POCOL_MAGIC;
 	fwrite(&magic_header, sizeof(uint32_t), 1, p.out);
 
+	/* set starter */
 	cursor = source;
+	line = 1;
 	p.lookahead = next();
+
 	/* Compiling process */
 	while (p.lookahead.type != TOK_EOF) {
 		/* only parse instruction if the token.type is identifier */
@@ -277,7 +286,9 @@ int pocol_compile_file(char *path, char *out)
 	fclose(p.out);
 
 	if (error_count > 0) {
-		cursor = NULL; /* prevent <segfault> */
+		cursor = NULL;  /* dont skip until newline, we doesnt have anymore string here (EOF) */
+		line = 0;	/* dont print line:col */
+
 		compiler_error("Compilation failed. (%d total errors)", error_count);
 		unlink(tempfile);
 		return -1;
