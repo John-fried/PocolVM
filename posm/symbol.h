@@ -3,6 +3,8 @@
 
 #include "../pm/vm.h"
 
+#define COMPILER_MAX_SYMBOL (8 * 256)
+
 typedef enum {
 	SYM_LABEL,
 } SymbolKind;
@@ -22,7 +24,7 @@ typedef struct {
 } SymData;
 
 typedef struct {
-	SymData *symbols;
+	SymData symbols[COMPILER_MAX_SYMBOL];
 	unsigned int symbol_count;
 } PocolSymbol;
 

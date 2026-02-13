@@ -31,10 +31,11 @@ ST_DATA char *cursor = NULL;
 ST_DATA unsigned int line = 0;
 ST_DATA unsigned int col = 1;
 ST_DATA unsigned int error_count = 0;
-ST_DATA PocolSymbol *symbols;
+ST_DATA PocolSymbol symbols = {.symbol_count = 0};
 
 /* forward declaration*/
 ST_FUNC void consume(void);
+ST_INLN void consume_until_newline(void);
 
 /*------------------------------------------------*/
 
@@ -56,9 +57,7 @@ void compiler_error(const char *fmt, ...)
 	fflush(stderr);
 	error_count++;
 
-	if (cursor)
-		/* skip until newline (one line, one error -- prevent garbage error from one line) */
-		while (*cursor != '\n' && *cursor != '\0') consume();
+	consume_until_newline();
 }
 
 /********************** Lexer *************************/
@@ -78,6 +77,12 @@ ST_FUNC void consume(void)
 	cursor++;
 }
 
+ST_INLN void consume_until_newline(void)
+{
+	if (cursor)
+		while (*cursor != '\n' && *cursor != '\0') consume();
+}
+
 /* next -- take the next token from cursor */
 ST_FUNC Token next(void)
 {
@@ -86,7 +91,7 @@ ST_FUNC Token next(void)
 			consume();
 		/* skip comment until newline */
 		else if (*cursor == ';')
-			while (*cursor != '\n' && *cursor != '\0') consume();
+			consume_until_newline();
 		else
 			break;
 	}
@@ -249,7 +254,7 @@ ST_FUNC void parse_inst(Parser *p)
 			char name[p->lookahead.length + 1];
 			memcpy(name, p->lookahead.start, p->lookahead.length);
 
-			if ((label_data = pocol_symfind(symbols, SYM_LABEL, name)) == NULL) {
+			if ((label_data = pocol_symfind(&symbols, SYM_LABEL, name)) == NULL) {
 				compiler_error("label %s not found", name);
 				continue;
 			}
@@ -294,23 +299,29 @@ int pocol_compile_file(char *path, char *out)
 
 	/* Compiling process */
 	while (p.lookahead.type != TOK_EOF) {
-		if (p.lookahead.type == TOK_LABEL) {
-			/* push to symbol table */
-			SymData symdata;
-
-			symdata.kind = SYM_LABEL;
-			memcpy(symdata.name, p.lookahead.start, p.lookahead.length); /* copy label name with start and length */
-			symdata.as.label.pc = (uint8_t) ftell(p.out); /* mark this pc */
-			symdata.as.label.is_defined = 1;
-
-			if (pocol_sympush(symbols, &symdata) == -1) {
-				compiler_error("Duplicate label symbol `%s`", symdata.name);
-				break;
-			}
-		}
-
 		/* only parse instruction if the token.type is identifier */
 		if (p.lookahead.type == TOK_IDENT) {
+			Token t = peek(1);
+			if (t.type == TOK_LABEL) {
+				/* push to symbol table */
+				SymData symdata;
+
+				symdata.kind = SYM_LABEL;
+				memcpy(symdata.name, t.start, t.length); /* copy label name with start and length */
+				symdata.as.label.pc = (uint8_t) ftell(p.out); /* mark this pc */
+				symdata.as.label.is_defined = 1;
+
+				if (pocol_sympush(&symbols, &symdata) == -1) {
+					compiler_error("Duplicate label symbol `%s`", symdata.name);
+					break;
+				}
+
+				/* skip label */
+				consume_until_newline();
+				parser_advance(&p);
+				continue;
+			}
+
 			parse_inst(&p);
 			continue;
 		}
