@@ -8,12 +8,12 @@ typedef enum {
 } SymbolKind;
 
 typedef struct {
-	Inst_addr pc;	/* the address of program counter to go */
+	Inst_Addr pc;	/* the address of program counter to go */
 	int is_defined; /* is defined first? (handles forward reference)*/
 } SymLabel;
 
 typedef struct {
-	const char *name;
+	char *name;
 	SymbolKind kind; /* symbol kind types */
 
 	union {
@@ -24,9 +24,9 @@ typedef struct {
 typedef struct {
 	SymData *symbols;
 	unsigned int symbol_count;
-} PocolSymbol
+} PocolSymbol;
 
-PocolSymbol *pocol_symfind(PocolSymbol *sym, SymbolKind kind, const char *name);
+SymData *pocol_symfind(PocolSymbol *sym, SymbolKind kind, const char *name);
 int pocol_sympush(PocolSymbol *sym, SymData *data);
 
 #endif /* POCOL_SYMBOL_H */

@@ -2,6 +2,7 @@
 #include "../common.h"
 #include "../pm/vm.h"
 #include "compiler.h"
+#include "symbol.h"
 
 #include <ctype.h>
 #include <string.h>
@@ -30,6 +31,7 @@ ST_DATA char *cursor = NULL;
 ST_DATA unsigned int line = 0;
 ST_DATA unsigned int col = 1;
 ST_DATA unsigned int error_count = 0;
+ST_DATA PocolSymbol *symbols;
 
 /* forward declaration*/
 ST_FUNC void consume(void);
@@ -112,6 +114,11 @@ ST_FUNC Token next(void)
 		return t;
 	}
 
+	if (*cursor == ':') {
+		t.type = TOK_LABEL;
+		t.length = cursor - t.start;
+		return t;
+	}
 	/* decide whether is identifier or register.
 	   check a-Z
 	*/
@@ -215,7 +222,7 @@ ST_FUNC void parse_inst(Parser *p)
 	for (int i = 0; i < inst->operand; i++) {
 		Token t = peek(i);
 		if (t.type == TOK_REGISTER) types[i] = OPR_REG;
-		else if (t.type == TOK_INT) types[i] = OPR_IMM;
+		else if (t.type == TOK_INT || t.type == TOK_LABEL) types[i] = OPR_IMM;
 	}
 
 	/* write opcode & byte descriptor */
@@ -233,6 +240,21 @@ ST_FUNC void parse_inst(Parser *p)
 		if (types[i] == OPR_REG) {
 			uint8_t reg = (uint8_t)val;
 			fwrite(&reg, 1, 1, p->out);
+			continue;
+		}
+
+		/* handle label */
+		if (p->lookahead.type == TOK_LABEL) {
+			SymData *label_data;
+			char name[p->lookahead.length + 1];
+			memcpy(name, p->lookahead.start, p->lookahead.length);
+
+			if ((label_data = pocol_symfind(symbols, SYM_LABEL, name)) == NULL) {
+				compiler_error("label %s not found", name);
+				continue;
+			}
+
+			fwrite(&label_data->as.label.pc, 1, 1, p->out);
 			continue;
 		}
 
@@ -272,6 +294,21 @@ int pocol_compile_file(char *path, char *out)
 
 	/* Compiling process */
 	while (p.lookahead.type != TOK_EOF) {
+		if (p.lookahead.type == TOK_LABEL) {
+			/* push to symbol table */
+			SymData symdata;
+
+			symdata.kind = SYM_LABEL;
+			memcpy(symdata.name, p.lookahead.start, p.lookahead.length); /* copy label name with start and length */
+			symdata.as.label.pc = (uint8_t) ftell(p.out); /* mark this pc */
+			symdata.as.label.is_defined = 1;
+
+			if (pocol_sympush(symbols, &symdata) == -1) {
+				compiler_error("Duplicate label symbol `%s`", symdata.name);
+				break;
+			}
+		}
+
 		/* only parse instruction if the token.type is identifier */
 		if (p.lookahead.type == TOK_IDENT) {
 			parse_inst(&p);

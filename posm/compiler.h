@@ -13,6 +13,7 @@ typedef enum {
 	TOK_EOF = 0,
 	TOK_ILLEGAL,
 	TOK_INT,
+	TOK_LABEL, /* ':' */
 	TOK_IDENT, /* identifier */
 	TOK_REGISTER, /* register (prefix: 'r') */
 } TokenType;
