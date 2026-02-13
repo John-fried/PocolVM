@@ -7,9 +7,11 @@
 
 int main(void)
 {
+	printf("Input: [whatever instruction] 0x01(OPR_REG) 0x02(OPR_IMM)\n");
 	uint8_t desc = DESC_PACK(0x01, 0x02);
-	printf("desc: %d\n", desc);
+	printf("Descriptor: %d\n", desc);
 	uint8_t op1 = DESC_GET_OP1(desc);
 	uint8_t op2 = DESC_GET_OP2(desc);
-	printf("op1: %d\nop2: %d", op1, op2);
+	printf("Operand1: %d\nOperand2: %d\n", op1, op2);
+	return 0;
 }
