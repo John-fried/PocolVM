@@ -186,6 +186,10 @@ Err pocol_execute_inst(PocolVM *vm)
 			*dest += src;
 		} break;
 
+		case INST_JMP:
+			vm->pc = pocol_fetch_operand(vm, op1);
+			break;
+
 		case INST_PRINT: /* (for debugging) */
 			printf("%" PRIu64 "", pocol_fetch_operand(vm, op1));
 			break;

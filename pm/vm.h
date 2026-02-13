@@ -43,6 +43,7 @@ typedef enum {
     INST_PUSH,
     INST_POP,
     INST_ADD,
+    INST_JMP,
     INST_PRINT,
     COUNT_INST	/* last index, start with 0 (halt) and this counts */
 } Inst_Type;

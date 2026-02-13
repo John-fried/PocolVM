@@ -21,6 +21,7 @@ const Inst_Def inst_table[COUNT_INST] = {
     [INST_PUSH]  = { .type = INST_PUSH,  .name = "push", .operand = 1, },
     [INST_POP]   = { .type = INST_POP,   .name = "pop", .operand = 1, },
     [INST_ADD]   = { .type = INST_ADD,   .name = "add", .operand = 2, },
+    [INST_JMP]   = { .type = INST_JMP,   .name = "jmp", .operand = 1, },
     [INST_PRINT] = { .type = INST_PRINT, .name = "print", .operand = 1, },
 };
 
