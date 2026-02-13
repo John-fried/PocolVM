@@ -1,7 +1,7 @@
 TARGET = posm
 
 CC ?= gcc
-CFLAGS = --std=c99 -MMD -MP -Wall -Wextra
+CFLAGS = --std=c99 -Wall -Wextra -pedantic
 EXTRAFLAGS ?= # extra flags from input
 PROFLAGS = -O2 -s
 DEBUGFLAGS = -g
@@ -11,8 +11,6 @@ BINDIR = $(PREFIX)/bin
 
 SRCS = $(wildcard *.c)
 OBJS = $(SRCS:.c=.o)
-
--include $(SRCS:.c=.d)
 
 all: CFLAGS += $(PROFLAGS)
 all: $(TARGET)
@@ -36,6 +34,6 @@ uninstall:
 	rm -f $(BINDIR)/$(TARGET)
 
 clean:
-	rm -f $(TARGET) $(OBJS) $(SRCS:.c=.d)
+	rm -f $(TARGET) $(OBJS)
 
 .PHONY: all debug install uninstall clean
