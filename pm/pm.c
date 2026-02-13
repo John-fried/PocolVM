@@ -8,7 +8,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	PocolVM *vm;
+	PocolVM *vm = NULL;
 	Err err = ERR_OK;
 
 	if (pocol_load_program_into_vm(argv[1], &vm) == 0) {

@@ -27,7 +27,7 @@ void pocol_error(const char *fmt, ...)
 
 	va_list ap;
 	va_start(ap, fmt);
-	fprintf(stderr, "vm.error: %s: ", current_path);
+	fprintf(stderr, "%s: %s: ", program_invocation_name, current_path);
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, "\n");
 	fflush(stderr);
@@ -82,10 +82,10 @@ int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 	return 0;
 
 error:
-	if (vm) pocol_free_vm(*vm);
+	if (vm != NULL) pocol_free_vm(*vm);
 	if (errno) {
 		pocol_error("%s", strerror(errno));
-		fprintf(stderr, "%s: error: load failed with %d\n", program_invocation_name, errno);
+		fprintf(stderr, "%s: load failed with %d\n", program_invocation_name, errno);
 	}
 	if (fp) fclose(fp);
 	return -1;
@@ -94,7 +94,6 @@ error:
 /* Free vm */
 void pocol_free_vm(PocolVM *vm)
 {
-	assert(vm != NULL);
 	free(vm);
 }
 
