@@ -3,7 +3,8 @@
 
 #include "../pm/vm.h"
 
-#define COMPILER_MAX_SYMBOL (8 * 256)
+#define COMPILER_MAX_SYMBOL (4 * 256)
+#define COMPILER_MAX_SYMBOL_NAME 256
 
 typedef enum {
 	SYM_LABEL,
@@ -15,7 +16,7 @@ typedef struct {
 } SymLabel;
 
 typedef struct {
-	char *name;
+	char name[COMPILER_MAX_SYMBOL_NAME];
 	SymbolKind kind; /* symbol kind types */
 
 	union {

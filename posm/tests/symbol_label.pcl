@@ -3,5 +3,6 @@ start:
 	push 10
 	pop r0
 	pop r1
-	add 10, r1
-	print 10
+	add r0, r1
+	print r0
+

@@ -119,29 +119,32 @@ ST_FUNC Token next(void)
 		return t;
 	}
 
-	if (*cursor == ':') {
-		t.type = TOK_LABEL;
-		t.length = cursor - t.start;
-		return t;
-	}
 	/* decide whether is identifier or register.
 	   check a-Z
 	*/
-	if (isalpha((unsigned char)*cursor)) {
-		char *start = cursor;
+	if (isalpha((unsigned char)*cursor) || *cursor == '_') {
 		/* check a-Z or 1-10 or '_' */
 		while (isalnum((unsigned char)*cursor) || *cursor == '_')
 			consume();
 
-		t.length = cursor - start;
-		t.type = TOK_IDENT;
+		/* check if label */
+		if (*cursor == ':') {
+			t.type = TOK_LABEL;
+			t.length = cursor - t.start;
+			consume(); /* skip ':' */
+			return t;
+		}
 
 		/* check if register */
-		if (start[0] == 'r') {
+		if (t.start[0] == 'r') {
 			t.type = TOK_REGISTER;
-			if (isdigit(start[1]))
-				t.value = atoi(start + 1);
+			if (isdigit(t.start[1])) /* r0 - r..[digit].. */
+				t.value = atoi(t.start + 1);
+			return t;
 		}
+
+		t.length = cursor - t.start;
+		t.type = TOK_IDENT;
 
 		return t;
 	}
@@ -200,8 +203,12 @@ ST_FUNC void parser_advance(Parser *p)
    - search if instruction is in the table,
    - check the operand count && operand types,
    - write the mnemonic opcode && write the operand opcode
+
+  Return value:
+   0  Normal
+   -1 Instruction not found
 */
-ST_FUNC void parse_inst(Parser *p)
+ST_FUNC int parse_inst(Parser *p)
 {
 	Token mnemonic = p->lookahead;
 	const Inst_Def *inst = NULL;
@@ -216,18 +223,15 @@ ST_FUNC void parse_inst(Parser *p)
 		}
 	}
 
-	if (!inst) {
-		compiler_error("unknown `%.*s` instruction in program", mnemonic.length, mnemonic.start);
-		parser_advance(p);
-		return;
-	}
+	if (!inst)
+		return -1;
 
 	/* Create operand descriptor */
 	OperandType types[2] = {OPR_NONE, OPR_NONE};
 	for (int i = 0; i < inst->operand; i++) {
 		Token t = peek(i);
 		if (t.type == TOK_REGISTER) types[i] = OPR_REG;
-		else if (t.type == TOK_INT || t.type == TOK_LABEL) types[i] = OPR_IMM;
+		else if (t.type == TOK_INT || t.type == TOK_IDENT) types[i] = OPR_IMM;
 	}
 
 	/* write opcode & byte descriptor */
@@ -240,33 +244,31 @@ ST_FUNC void parse_inst(Parser *p)
 
 	for (int i = 0; i < inst->operand; i++) {
 		uint64_t val = (uint64_t)p->lookahead.value;
-		parser_advance(p); /* skip val */
+
+		if (p->lookahead.type == TOK_IDENT) {
+			char name[p->lookahead.length + 1];
+			memcpy(name, p->lookahead.start, p->lookahead.length);
+			name[p->lookahead.length] = '\0';
+
+			SymData *s = pocol_symfind(&symbols, SYM_LABEL, name);
+			if (s) val = s->as.label.pc;
+			else compiler_error("indentifier `%s` not defined", name);
+		}
 
 		if (types[i] == OPR_REG) {
 			uint8_t reg = (uint8_t)val;
 			fwrite(&reg, 1, 1, p->out);
-			continue;
+		} else {
+			pocol_write64(p->out, val);
 		}
 
-		/* handle label */
-		if (p->lookahead.type == TOK_LABEL) {
-			SymData *label_data;
-			char name[p->lookahead.length + 1];
-			memcpy(name, p->lookahead.start, p->lookahead.length);
-
-			if ((label_data = pocol_symfind(&symbols, SYM_LABEL, name)) == NULL) {
-				compiler_error("label %s not found", name);
-				continue;
-			}
-
-			fwrite(&label_data->as.label.pc, 1, 1, p->out);
-			continue;
-		}
-
-		pocol_write64(p->out, val);
+		parser_advance(p); /* skip val */
 	}
+
+	return 0;
 }
 
+// NOTE: Don't auto quit if error, just continue. (like gcc/c compiler behavior)
 int pocol_compile_file(char *path, char *out)
 {
 	struct stat st;
@@ -294,39 +296,52 @@ int pocol_compile_file(char *path, char *out)
 
 	/* set starter */
 	cursor = source;
-	line = 1;
+	line = 1; // start at line 1
 	p.lookahead = next();
 
 	/* Compiling process */
 	while (p.lookahead.type != TOK_EOF) {
+		if (p.lookahead.type == TOK_LABEL) {
+			/* push to symbol table */
+			SymData symdata;
+
+			symdata.kind = SYM_LABEL;
+			memcpy(symdata.name, p.lookahead.start, p.lookahead.length); /* copy label name with start and length */
+			symdata.name[p.lookahead.length] = '\0';
+			symdata.as.label.pc = (Inst_Addr) ftell(p.out); /* mark this pc */
+			symdata.as.label.is_defined = 1;
+
+			if (pocol_sympush(&symbols, &symdata) == -1)
+				compiler_error("duplicate label `%s`", symdata.name);
+
+			/* skip label */
+			consume_until_newline();
+			parser_advance(&p);
+			continue;
+		}
+
 		/* only parse instruction if the token.type is identifier */
 		if (p.lookahead.type == TOK_IDENT) {
-			Token t = peek(1);
-			if (t.type == TOK_LABEL) {
-				/* push to symbol table */
-				SymData symdata;
+			char name[p.lookahead.length + 1];
+			memcpy(name, p.lookahead.start, p.lookahead.length);
+			name[p.lookahead.length] = '\0';
 
-				symdata.kind = SYM_LABEL;
-				memcpy(symdata.name, t.start, t.length); /* copy label name with start and length */
-				symdata.as.label.pc = (uint8_t) ftell(p.out); /* mark this pc */
-				symdata.as.label.is_defined = 1;
+			if (parse_inst(&p) == 0) continue;
 
-				if (pocol_sympush(&symbols, &symdata) == -1) {
-					compiler_error("Duplicate label symbol `%s`", symdata.name);
-					break;
-				}
-
-				/* skip label */
-				consume_until_newline();
+			SymData *label_data = pocol_symfind(&symbols, SYM_LABEL, name);
+			if (label_data != NULL) {
+				pocol_write64(p.out, label_data->as.label.pc);
 				parser_advance(&p);
 				continue;
 			}
 
-			parse_inst(&p);
+			compiler_error("unknown `%s` instruction in program", name);
+
+			parser_advance(&p);
 			continue;
 		}
 
-		parser_advance(&p); /* next token (if token != identifier) */
+		parser_advance(&p); /* next token (skip invalid token) */
 	}
 
 	munmap(source, st.st_size);
