@@ -172,9 +172,9 @@ ST_FUNC Token peek(CompilerCtx *ctx, int n)
 /*********************** Parser *****************************/
 
 /* take the next token from cursor and store it into parser lookahead */
-ST_FUNC void parser_advance(CompilerCtx *ctx, Parser *p)
+ST_FUNC void parser_advance(CompilerCtx *ctx)
 {
-	p->lookahead = next(ctx);
+	ctx->lookahead = next(ctx);
 }
 
 /* parse instruction -- Instruction Set Architecture (ISA)
@@ -184,9 +184,9 @@ ST_FUNC void parser_advance(CompilerCtx *ctx, Parser *p)
 
    -1 Instruction not found
 */
-ST_FUNC int parse_inst(CompilerCtx *ctx, Parser *p)
+ST_FUNC int parse_inst(CompilerCtx *ctx)
 {
-	Token mnemonic = p->lookahead;
+	Token mnemonic = ctx->lookahead;
 	const Inst_Def *inst = NULL;
 
 	/* search from instruction table */
@@ -214,17 +214,17 @@ ST_FUNC int parse_inst(CompilerCtx *ctx, Parser *p)
 	uint8_t opcode = (uint8_t)inst->type;
 	uint8_t desc = DESC_PACK(types[0], types[1]);
 
-	parser_advance(ctx, p); /* skip mnemonic */
-	fwrite(&opcode, 1, 1, p->out);
-	fwrite(&desc, 1, 1, p->out); /* write descriptor for operand */
+	parser_advance(ctx); /* skip mnemonic */
+	fwrite(&opcode, 1, 1, ctx->out);
+	fwrite(&desc, 1, 1, ctx->out); /* write descriptor for operand */
 
 	for (int i = 0; i < inst->operand; i++) {
-		uint64_t val = (uint64_t)p->lookahead.value;
+		uint64_t val = (uint64_t)ctx->lookahead.value;
 
-		if (p->lookahead.type == TOK_IDENT) {
-			char name[p->lookahead.length + 1];
-			memcpy(name, p->lookahead.start, p->lookahead.length);
-			name[p->lookahead.length] = '\0';
+		if (ctx->lookahead.type == TOK_IDENT) {
+			char name[ctx->lookahead.length + 1];
+			memcpy(name, ctx->lookahead.start, ctx->lookahead.length);
+			name[ctx->lookahead.length] = '\0';
 
 			SymData *s = pocol_symfind(&ctx->symbols, SYM_LABEL, name);
 			if (s) val = s->as.label.pc;
@@ -233,12 +233,12 @@ ST_FUNC int parse_inst(CompilerCtx *ctx, Parser *p)
 
 		if (types[i] == OPR_REG) {
 			uint8_t reg = (uint8_t)val;
-			fwrite(&reg, 1, 1, p->out);
+			fwrite(&reg, 1, 1, ctx->out);
 		} else {
-			emit64(p->out, val);
+			emit64(ctx->out, val);
 		}
 
-		parser_advance(ctx, p); /* skip val */
+		parser_advance(ctx); /* skip val */
 	}
 
 	return 0;
@@ -249,7 +249,6 @@ int pocol_compile_file(CompilerCtx *ctx, char *out)
 {
 	struct stat st;
 	int fd = open(ctx->path, O_RDONLY);
-	Parser p;
 
 	if (fd < 0) goto error;
 	if (fstat(fd, &st) < 0) goto error;
@@ -261,30 +260,28 @@ int pocol_compile_file(CompilerCtx *ctx, char *out)
 	char tempfile[1024];
 	snprintf(tempfile, sizeof(tempfile), "/tmp/%ju.pob.tmp", (uintmax_t)st.st_ino);
 
-	p.out = fopen(tempfile, "wb");
-	if (!p.out)
+	ctx->out = fopen(tempfile, "wb");
+	if (!ctx->out)
 		goto error;
 
 	/* write magic */
 	uint32_t magic_header = POCOL_MAGIC;
-	fwrite(&magic_header, sizeof(uint32_t), 1, p.out);
+	fwrite(&magic_header, sizeof(uint32_t), 1, ctx->out);
 
 	/* Set Starter */
 	ctx->cursor = ctx->source;
-	ctx->parser = &p;
 	ctx->line = 1; /* enable line:col prefix if error occured */
-	p.lookahead = next(ctx);
+	ctx->lookahead = next(ctx);
 
-
-	while (p.lookahead.type != TOK_EOF) {
-		if (p.lookahead.type == TOK_LABEL) {
+	while (ctx->lookahead.type != TOK_EOF) {
+		if (ctx->lookahead.type == TOK_LABEL) {
 			/* push to symbol table */
 			SymData symdata;
 
 			symdata.kind = SYM_LABEL;
-			memcpy(symdata.name, p.lookahead.start, p.lookahead.length); /* copy label name with start and length */
-			symdata.name[p.lookahead.length] = '\0';
-			symdata.as.label.pc = (Inst_Addr) ftell(p.out); /* mark this pc */
+			memcpy(symdata.name, ctx->lookahead.start, ctx->lookahead.length); /* copy label name with start and length */
+			symdata.name[ctx->lookahead.length] = '\0';
+			symdata.as.label.pc = (Inst_Addr) ftell(ctx->out); /* use stream cursor position as label pc */
 			symdata.as.label.is_defined = 1;
 
 			if (pocol_sympush(&ctx->symbols, &symdata) == -1)
@@ -292,37 +289,37 @@ int pocol_compile_file(CompilerCtx *ctx, char *out)
 
 			/* skip label */
 			consume_until_newline(ctx);
-			parser_advance(ctx, &p);
+			parser_advance(ctx);
 			continue;
 		}
 
 		/* only parse instruction if the token.type is identifier */
-		if (p.lookahead.type == TOK_IDENT) {
-			char name[p.lookahead.length + 1];
-			memcpy(name, p.lookahead.start, p.lookahead.length);
-			name[p.lookahead.length] = '\0';
+		if (ctx->lookahead.type == TOK_IDENT) {
+			char name[ctx->lookahead.length + 1];
+			memcpy(name, ctx->lookahead.start, ctx->lookahead.length);
+			name[ctx->lookahead.length] = '\0';
 
-			if (parse_inst(ctx, &p) == 0) continue;
+			if (parse_inst(ctx) == 0) continue;
 
 			SymData *label_data = pocol_symfind(&ctx->symbols, SYM_LABEL, name);
 			if (label_data != NULL) {
-				emit64(p.out, label_data->as.label.pc);
-				parser_advance(ctx, &p);
+				emit64(ctx->out, label_data->as.label.pc);
+				parser_advance(ctx);
 				continue;
 			}
 
 			compiler_error(ctx, "unknown `%s` instruction in program", name);
 
-			parser_advance(ctx, &p);
+			parser_advance(ctx);
 			continue;
 		}
 
-		parser_advance(ctx, &p); /* next token (skip invalid token) */
+		parser_advance(ctx); /* next token (skip invalid token) */
 	}
 
 	munmap(ctx->source, st.st_size);
 	close(fd);
-	fclose(p.out);
+	fclose(ctx->out);
 
 	if (ctx->total_error > 0) {
 		ctx->cursor = NULL;  /* dont skip until newline, we doesnt have anymore string here (EOF) */

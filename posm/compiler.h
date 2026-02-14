@@ -28,12 +28,8 @@ typedef struct {
 } Token;
 
 typedef struct {
-	Token lookahead; /* Current parsed token */
 	FILE *out;
-} Parser;
-
-typedef struct {
-	Parser *parser;
+	Token lookahead; /* Curent parsed token */
 	char *path; /* Current source path */
 	char *source; /* source files */
 	char *cursor; /* currrent cursor to source files */
