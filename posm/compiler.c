@@ -25,7 +25,7 @@ const Inst_Def inst_table[COUNT_INST] = {
     [INST_PRINT] = { .type = INST_PRINT, .name = "print", .operand = 1, },
 };
 
-/* Forward declarations */
+/* Forward declarations -- for static function */
 ST_FUNC void consume(CompilerCtx *ctx);
 ST_FUNC void consume_until_newline(CompilerCtx *ctx);
 
@@ -245,12 +245,11 @@ ST_FUNC int parse_inst(CompilerCtx *ctx, Parser *p)
 }
 
 // NOTE: Don't auto quit if error, just continue. (like gcc/c compiler behavior)
-int pocol_compile_file(CompilerCtx *ctx, char *path, char *out)
+int pocol_compile_file(CompilerCtx *ctx, char *out)
 {
 	struct stat st;
-	int fd = open(path, O_RDONLY);
+	int fd = open(ctx->path, O_RDONLY);
 	Parser p;
-	ctx->path = path;
 
 	if (fd < 0) goto error;
 	if (fstat(fd, &st) < 0) goto error;
@@ -270,12 +269,13 @@ int pocol_compile_file(CompilerCtx *ctx, char *path, char *out)
 	uint32_t magic_header = POCOL_MAGIC;
 	fwrite(&magic_header, sizeof(uint32_t), 1, p.out);
 
-	/* set starter */
+	/* Set Starter */
 	ctx->cursor = ctx->source;
-	ctx->line = 1; // start at line 1
+	ctx->parser = &p;
+	ctx->line = 1; /* enable line:col prefix if error occured */
 	p.lookahead = next(ctx);
 
-	/* Compiling process */
+
 	while (p.lookahead.type != TOK_EOF) {
 		if (p.lookahead.type == TOK_LABEL) {
 			/* push to symbol table */

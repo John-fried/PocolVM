@@ -33,7 +33,7 @@ typedef struct {
 } Parser;
 
 typedef struct {
-	Parser *p;
+	Parser *parser;
 	char *path; /* Current source path */
 	char *source; /* source files */
 	char *cursor; /* currrent cursor to source files */
@@ -43,7 +43,7 @@ typedef struct {
 	PocolSymbol symbols; /* Compiler symbol table */
 } CompilerCtx;
 
-int pocol_compile_file(CompilerCtx *ctx, char *path, char *out);
+int pocol_compile_file(CompilerCtx *ctx, char *out);
 void compiler_error(CompilerCtx *ctx , const char *fmt, ...);
 
 #endif /* POCOL_COMPILER_H */
