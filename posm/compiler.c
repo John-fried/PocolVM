@@ -82,7 +82,7 @@ ST_FUNC int parse_inst(CompilerCtx *ctx)
 	/* Create operand descriptor */
 	OperandType types[2] = {OPR_NONE, OPR_NONE};
 	for (int i = 0; i < inst->operand; i++) {
-		Token t = peek(ctx, 1);
+		Token t = peek(ctx, i);
 		if (t.type == TOK_REGISTER) types[i] = OPR_REG;
 		else if (t.type == TOK_INT || t.type == TOK_IDENT) types[i] = OPR_IMM;
 	}
