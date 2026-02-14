@@ -6,9 +6,11 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#include "../common.h"
+
 /* Serialize 64-bit value into 8 bytes with Little-Endian order */
 /* stackoverflow 69968061 */
-inline void emit64(FILE *out, uint64_t val)
+ST_INLN void emit64(FILE *out, uint64_t val)
 {
 	uint8_t bytes[8];
 	for (int i = 0; i<8; i++)

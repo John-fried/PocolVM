@@ -71,7 +71,7 @@ ST_FUNC void consume(CompilerCtx *ctx)
 
 ST_INLN void consume_until_newline(CompilerCtx *ctx)
 {
-	if (*ctx->cursor)
+	if (ctx->cursor)
 		while (*ctx->cursor != '\n' && *ctx->cursor != '\0') consume(ctx);
 }
 
