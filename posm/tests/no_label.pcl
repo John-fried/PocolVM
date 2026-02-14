@@ -1,0 +1,6 @@
+; test error case: undefined reference to `_start`
+
+bruh:
+	push 60
+	pop r0
+	print r0

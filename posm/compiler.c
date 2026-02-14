@@ -198,11 +198,16 @@ int pocol_compile_file(CompilerCtx *ctx, char *out)
 	close(fd);
 	fclose(ctx->out);
 
+	ctx->cursor = NULL;  /* dont skip until newline, we doesnt have anymore string here (EOF) */
+
+	/* check for _start symbol */
+	if (pocol_symfind(&ctx->symbols, SYM_LABEL, "_start") == NULL)
+		compiler_error(ctx, "undefined reference to `_start`");
+
 	if (ctx->total_error > 0) {
-		ctx->cursor = NULL;  /* dont skip until newline, we doesnt have anymore string here (EOF) */
 		ctx->line = 0;	/* dont print line:col */
 
-		compiler_error(ctx, "Compilation failed. (%d total errors)", ctx->total_error);
+		compiler_error(ctx, "compilation failed. (%d total errors)", ctx->total_error);
 		unlink(tempfile);
 		return -1;
 	}
