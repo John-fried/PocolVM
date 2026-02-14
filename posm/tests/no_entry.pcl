@@ -4,3 +4,4 @@ bruh:
 	push 60
 	pop r0
 	print r0
+	halt
