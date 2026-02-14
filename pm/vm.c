@@ -23,13 +23,12 @@ ST_DATA const char *current_path = NULL;
 
 void pocol_error(const char *fmt, ...)
 {
-	if (!current_path) current_path = program_invocation_name;
-
 	va_list ap;
 	va_start(ap, fmt);
-	fprintf(stderr, "%s: %s: ", program_invocation_name, current_path);
+	fprintf(stderr, "%s: ", program_invocation_name);
+	if (current_path)
+		fprintf(stderr, "%s: ", current_path);
 	vfprintf(stderr, fmt, ap);
-	fprintf(stderr, "\n");
 	fflush(stderr);
 }
 
@@ -48,6 +47,12 @@ int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 	if (fstat(fileno(fp), &st) < 0)
 		goto error;
 
+	/* is regular file? */
+	if (!S_ISREG(st.st_mode)) {
+		pocol_error("file format not recognized\n");
+		goto error;
+	}
+
 	size = st.st_size;
 	if (size == 0) {
 		errno = ENOEXEC;
@@ -55,7 +60,7 @@ int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 	}
 
 	if (size > POCOL_MEMORY_SIZE) {
-		pocol_error("size exceeds limit: %ld/%d bytes", size, POCOL_MEMORY_SIZE);
+		pocol_error("size exceeds limit: %ld/%d bytes\n", size, POCOL_MEMORY_SIZE);
 		goto error;
 	}
 
@@ -70,24 +75,22 @@ int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 	memcpy(&magic_header, (*vm)->memory, sizeof(uint32_t));
 
 	if (magic_header != POCOL_MAGIC) {
-		pocol_error("wrong magic number `0x%08X`", magic_header);
+		pocol_error("wrong magic number `0x%08X`\n", magic_header);
 		goto error;
 	}
 	fclose(fp);
 
 	/* Set initial valuee */
 	(*vm)->halt = 0;
-	(*vm)->pc = 4; /* skip magic_header */
+	(*vm)->pc = POCOL_MAGIC_SIZE; /* skip magic_header */
 	(*vm)->sp = 0;
 	return 0;
 
 error:
 	if (vm != NULL) pocol_free_vm(*vm);
-	if (errno) {
-		pocol_error("%s", strerror(errno));
-		fprintf(stderr, "%s: load failed with %d\n", program_invocation_name, errno);
-	}
 	if (fp) fclose(fp);
+	if (errno)
+		pocol_error("%s\n", strerror(errno));
 	return -1;
 }
 
@@ -121,7 +124,7 @@ Err pocol_execute_program(PocolVM *vm, int limit)
 	while (limit != 0 && !vm->halt) {
 		Err err = pocol_execute_inst(vm);
 		if (err != ERR_OK) {
-			pocol_error("0x%02X: %s (addr: %u)", vm->memory[vm->pc], err_as_cstr(err), vm->pc);
+			pocol_error("0x%02X: %s (addr: %u)\n", vm->memory[vm->pc], err_as_cstr(err), vm->pc);
 			return err;
 		}
 		if (limit > 0)
@@ -138,7 +141,7 @@ Err pocol_execute_program(PocolVM *vm, int limit)
 ST_INLN uint64_t pocol_fetch64(PocolVM *vm)
 {
 	if (vm->pc + 8 >= POCOL_MEMORY_SIZE) {
-		pocol_error("fetch: %s", err_as_cstr(ERR_ILLEGAL_INST_ACCESS));
+		pocol_error("%s\n", err_as_cstr(ERR_ILLEGAL_INST_ACCESS));
 		exit(ERR_ILLEGAL_INST_ACCESS);
 	}
 

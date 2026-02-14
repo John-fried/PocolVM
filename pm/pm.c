@@ -4,7 +4,7 @@
 int main(int argc, char **argv)
 {
 	if (argc == 1) {
-		pocol_error("no input files");
+		pocol_error("no input files\n");
 		return 1;
 	}
 
