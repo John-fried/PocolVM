@@ -9,6 +9,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "symbol.h"
+
 typedef enum {
 	TOK_EOF = 0,
 	TOK_ILLEGAL,
@@ -22,16 +24,22 @@ typedef struct {
 	TokenType type;
 	const char *start;
 	unsigned int length;
-	int64_t value; /* if tok == TOK_INT */
+	int64_t value; /* if tok == TOK_INT or TOK_REGISTER r[digit] */
 } Token;
 
 typedef struct {
-	Token lookahead;
 	FILE *out;
-} Parser;
+	Token lookahead; /* Curent parsed token */
+	char *path; /* Current source path */
+	char *source; /* source files */
+	char *cursor; /* currrent cursor to source files */
+	unsigned int line;
+	unsigned int col;
+	unsigned int total_error;
+	PocolSymbol symbols; /* Compiler symbol table */
+} CompilerCtx;
 
-
-int pocol_compile_file(char *path, char *out);
-void compiler_error(const char *fmt, ...);
+int pocol_compile_file(CompilerCtx *ctx, char *out);
+void compiler_error(CompilerCtx *ctx , const char *fmt, ...);
 
 #endif /* POCOL_COMPILER_H */
