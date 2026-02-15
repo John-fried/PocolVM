@@ -11,6 +11,7 @@ int main(int argc, char **argv)
 		.line = 0, /* disable line:col prefix if error occured */
 		.col = 1,
 		.total_error = 0,
+		.virtual_pc = 0,
 		.symbols = { .symbol_count = 0 }
 
 	};
