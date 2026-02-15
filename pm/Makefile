@@ -56,7 +56,7 @@ RESET   = $(shell tput sgr0 2>/dev/null || echo "")
 
 # Default target
 .PHONY: all
-all: info build
+all: info $(BUILDDIR)/$(TARGET)
 
 # Build info
 .PHONY: info

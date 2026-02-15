@@ -37,7 +37,7 @@ BLUE    = $(shell tput setaf 4 2>/dev/null || echo "")
 RESET   = $(shell tput sgr0 2>/dev/null || echo "")
 
 .PHONY: all
-all: info build
+all: info $(BUILDDIR)/$(TARGET)
 
 .PHONY: info
 info:
