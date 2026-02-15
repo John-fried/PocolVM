@@ -197,17 +197,7 @@ cd ../poclc && make
 ./poclc tests/hello.pc -o tests/hello.pob
 ```
 
-## 🤝 Contributing
-
-Areas for improvement:
-* Additional optimization passes
-* More sophisticated JIT compilation
-* Extended instruction set
-* Better error handling
-* Cross-platform improvements
-
-
-```
+## Contributing
 
 ## Documentation
 
