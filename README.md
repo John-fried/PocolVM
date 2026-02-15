@@ -103,7 +103,7 @@ cd ../pm && make
 cd ../poclc && make
 ```
 
-## ▶Usage
+## Usage
 
 ### Toolchain
 
