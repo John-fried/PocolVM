@@ -121,37 +121,8 @@ ST_FUNC int parse_inst(CompilerCtx *ctx)
 	return 0;
 }
 
-// NOTE: Don't auto quit if error, just continue. (like gcc/c compiler behavior)
-int pocol_compile_file(CompilerCtx *ctx, char *out)
+ST_FUNC void pocol_parse_file(CompilerCtx *ctx)
 {
-	struct stat st;
-	int fd = open(ctx->path, O_RDONLY);
-
-	if (fd < 0) goto error;
-	if (fstat(fd, &st) < 0) goto error;
-
-	ctx->source = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-	if (ctx->source == MAP_FAILED) goto error;
-
-	/* create temp output file */
-	char tempfile[1024];
-	snprintf(tempfile, sizeof(tempfile), "/tmp/%ju.pob.tmp", (uintmax_t)st.st_ino);
-
-	ctx->out = fopen(tempfile, "wb");
-	if (!ctx->out)
-		goto error;
-
-	/* init header */
-	PocolHeader header = {0};
-	header.magic = POCOL_MAGIC;
-	header.version = POCOL_VERSION;
-	fwrite(&header, sizeof(PocolHeader), 1, ctx->out); /* create header placeholder. Because after that we emit instruction*/
-
-	/* Set Starter */
-	ctx->cursor = ctx->source;
-	ctx->line = 1; /* enable line:col prefix if error occured */
-	ctx->lookahead = next(ctx);
-
 	while (ctx->lookahead.type != TOK_EOF) {
 		if (ctx->lookahead.type == TOK_LABEL) {
 			/* push to symbol table */
@@ -195,6 +166,41 @@ int pocol_compile_file(CompilerCtx *ctx, char *out)
 
 		parser_advance(ctx); /* next token (skip invalid token) */
 	}
+}
+
+// NOTE: Don't auto quit if error, just continue. (like gcc/c compiler behavior)
+int pocol_compile_file(CompilerCtx *ctx, char *out)
+{
+	struct stat st;
+	int fd = open(ctx->path, O_RDONLY);
+
+	if (fd < 0) goto error;
+	if (fstat(fd, &st) < 0) goto error;
+
+	ctx->source = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (ctx->source == MAP_FAILED) goto error;
+
+	/* create temp output file */
+	char tempfile[1024];
+	snprintf(tempfile, sizeof(tempfile), "/tmp/%ju.pob.tmp", (uintmax_t)st.st_ino);
+
+	ctx->out = fopen(tempfile, "wb");
+	if (!ctx->out)
+		goto error;
+
+	/* init header */
+	PocolHeader header = {0};
+	header.magic = POCOL_MAGIC;
+	header.version = POCOL_VERSION;
+	fwrite(&header, sizeof(PocolHeader), 1, ctx->out); /* create header placeholder. Because after that we emit instruction*/
+
+	/* Set Starter */
+	ctx->cursor = ctx->source;
+	ctx->line = 1; /* enable line:col prefix if error occured */
+	ctx->lookahead = next(ctx);
+
+	/* start parsing */
+	pocol_parse_file(ctx);
 
 	/* program entry point */
 	header.code_size = ftell(ctx->out) - sizeof(PocolHeader);
