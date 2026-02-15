@@ -68,6 +68,8 @@ PocolVM/
 ├── testing/                # Test framework
 │   ├── test_framework.h   # Test macros
 │   └── test_framework.c   # Implementation
+├── scripts/                # Some useful scripts
+│   └── formatunix.sh      # POSIX-compliant formatter
 ├── documentation/          # Documentation
 │   ├── INDEX.md           # Navigation hub
 │   ├── PROJECT_OVERVIEW.md

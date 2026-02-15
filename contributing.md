@@ -68,7 +68,7 @@ Every source file should include:
 |------|------------|---------|
 | Functions | snake_case | pocol_load_program |
 | Variables | snake_case | uint64_t pc |
-| Constants | UPPER_SNAKE | MAX_BREAKPOINTS |
+| Macros    | UPPER_SNAKE | MAX_BREAKPOINTS |
 
 ### Formatting
 
@@ -77,6 +77,14 @@ Use .clang-format:
 ```bash
 make format
 ```
+
+And run POSIX-compliant formatter (if you're windows):
+
+```bash
+./scripts/formatunix <path/to/file>
+```
+
+> Use `./scripts/formatunix .` to recursively format current directories
 
 ## Pull Request Process
 
