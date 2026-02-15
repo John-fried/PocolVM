@@ -1,4 +1,13 @@
+; two pass label; output 30
+
 _start:
+	jmp compute
+
+output:
+	print r0
+	halt
+
+compute:
 	push 10         ; 10 to stack
 	push 20         ; 20 to stack: [10, 20]
 
@@ -6,10 +15,4 @@ _start:
 	pop r1          ; r1 = 10
 	add r0, r1
 
-	print r0	; expected: 30
-	print r1	; expected: 10
-	halt            ; Stop
-
-	_start:
-
-; expected output: 3010
+	jmp output
