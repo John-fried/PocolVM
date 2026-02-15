@@ -109,6 +109,7 @@ ST_FUNC int parse_inst(CompilerCtx *ctx)
 
 			SymData *s = pocol_symfind(&ctx->symbols, SYM_LABEL, name);
 			if (s)
+				/* set as label IP (also as immediate value)  */
 				val = s->as.label.pc;
 			else if (ctx->pass == 2)
 				/* pass 1 shouldn't error (undefined label or something) */
@@ -120,7 +121,7 @@ ST_FUNC int parse_inst(CompilerCtx *ctx)
 				uint8_t reg = (uint8_t)val;
 				fwrite(&reg, 1, 1, ctx->out);
 			}
-			ctx->virtual_pc++; /* 1 bit */
+			ctx->virtual_pc++; /* 1 byte */
 		} else {
 			/* use 64 bit for immediate value */
 			ctx->virtual_pc += sizeof(uint64_t);
@@ -163,15 +164,6 @@ ST_FUNC void pocol_parse_file(CompilerCtx *ctx)
 
 			/* parse instruction */
 			if (parse_inst(ctx) == 0) continue;
-
-			/* parse label identifier */
-			SymData *label_data = pocol_symfind(&ctx->symbols, SYM_LABEL, name);
-			if (label_data != NULL) {
-				emit64(ctx->out, label_data->as.label.pc);
-				parser_advance(ctx);
-				continue;
-			}
-
 			compiler_error(ctx, "unknown `%s` instruction in program", name);
 			parser_advance(ctx);
 			continue;
@@ -211,12 +203,14 @@ int pocol_compile_file(CompilerCtx *ctx, char *out)
 	for (ctx->pass = 1; ctx->pass <= 2; ctx->pass++) {
 		ctx->line = 1;
 		ctx->col = 1;
-		ctx->virtual_pc = 0;
+		ctx->virtual_pc = sizeof(PocolHeader); /* reset (skip header offset) */
 		ctx->cursor = ctx->source; /* RESET cursor to the beggining of source */
 		ctx->lookahead = next(ctx);
-		ctx->total_error = 0;
 
 		pocol_parse_file(ctx);
+
+		if (ctx->pass == 1 && ctx->total_error > 0)
+			break;
 	}
 
 	/* program entry point */
