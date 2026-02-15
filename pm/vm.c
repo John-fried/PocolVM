@@ -16,14 +16,12 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <errno.h>
 #include <inttypes.h>
 
 #ifdef _WIN32
 #include <io.h>
 #include <fcntl.h>
-#include <sys/stat.h>
 #define fileno _fileno
 #define fstat _fstat
 #define S_ISREG(x) (((x) & _S_IFMT) == _S_IFREG)
@@ -31,6 +29,7 @@
 extern int errno;
 #endif
 #else
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
