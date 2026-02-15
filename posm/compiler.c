@@ -226,6 +226,9 @@ int pocol_compile_file(CompilerCtx *ctx, char *out)
 	return 0;
 
 error:
+	if (ctx->source) munmap(ctx->source, st.st_size);
+	if (fd > 0) close(fd);
+	if (ctx->out) fclose(ctx->out);
 	compiler_error(ctx, "%s", strerror(errno));
 	return -1;
 }
