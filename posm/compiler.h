@@ -36,6 +36,8 @@ typedef struct {
 	unsigned int line;
 	unsigned int col;
 	unsigned int total_error;
+	unsigned int pass : 2; /* pass mode (1 or 1) */
+	Inst_Addr virtual_pc; /* program counter for pass 1 */
 	PocolSymbol symbols; /* Compiler symbol table */
 } CompilerCtx;
 

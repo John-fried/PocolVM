@@ -57,7 +57,7 @@ ST_INLN void parser_advance(CompilerCtx *ctx)
 /* parse instruction -- Instruction Set Architecture (ISA)
    - search if instruction is in the table,
    - check the operand count && operand types,
-   - emit mnemonic opcode && emit operand opcode
+   - emit mnemonic opcode && emit operand opcode (only if pass 2)
 
    -1 Instruction not found
 */
@@ -87,13 +87,17 @@ ST_FUNC int parse_inst(CompilerCtx *ctx)
 		else if (t.type == TOK_INT || t.type == TOK_IDENT) types[i] = OPR_IMM;
 	}
 
-	/* write opcode & byte descriptor */
-	uint8_t opcode = (uint8_t)inst->type;
-	uint8_t desc = DESC_PACK(types[0], types[1]);
+	/* write opcode & byte descriptor (only if pass 2) */
+	if (ctx->pass == 2) {
+		uint8_t opcode = (uint8_t)inst->type;
+		uint8_t desc = DESC_PACK(types[0], types[1]);
 
+		fwrite(&opcode, 1, 1, ctx->out);
+		fwrite(&desc, 1, 1, ctx->out); /* write descriptor for operand */
+	}
+
+	ctx->virtual_pc += 2; /* opcode +1, descriptor +1 */
 	parser_advance(ctx); /* skip mnemonic */
-	fwrite(&opcode, 1, 1, ctx->out);
-	fwrite(&desc, 1, 1, ctx->out); /* write descriptor for operand */
 
 	for (int i = 0; i < inst->operand; i++) {
 		uint64_t val = (uint64_t)ctx->lookahead.value;
@@ -104,21 +108,69 @@ ST_FUNC int parse_inst(CompilerCtx *ctx)
 			name[ctx->lookahead.length] = '\0';
 
 			SymData *s = pocol_symfind(&ctx->symbols, SYM_LABEL, name);
-			if (s) val = s->as.label.pc;
-			else compiler_error(ctx, "indentifier `%s` not defined", name);
+			if (s)
+				/* set as label IP (also as immediate value)  */
+				val = s->as.label.pc;
+			else if (ctx->pass == 2)
+				/* pass 1 shouldn't error (undefined label or something) */
+				compiler_error(ctx, "indentifier `%s` not defined", name);
 		}
 
 		if (types[i] == OPR_REG) {
-			uint8_t reg = (uint8_t)val;
-			fwrite(&reg, 1, 1, ctx->out);
+			if (ctx->pass == 2) {
+				uint8_t reg = (uint8_t)val;
+				fwrite(&reg, 1, 1, ctx->out);
+			}
+			ctx->virtual_pc++; /* 1 byte */
 		} else {
-			emit64(ctx->out, val);
+			/* use 64 bit for immediate value */
+			ctx->virtual_pc += sizeof(uint64_t);
+			if (ctx->pass == 2)
+				emit64(ctx->out, val);
 		}
 
-		parser_advance(ctx); /* skip val */
+		parser_advance(ctx); /* skip to next operand */
 	}
 
 	return 0;
+}
+
+ST_FUNC void pocol_parse_file(CompilerCtx *ctx)
+{
+	while (ctx->lookahead.type != TOK_EOF) {
+		if (ctx->pass == 1 && ctx->lookahead.type == TOK_LABEL) {
+			/* push to symbol table (only if pass 1) */
+			SymData symdata;
+
+			symdata.kind = SYM_LABEL;
+			memcpy(symdata.name, ctx->lookahead.start, ctx->lookahead.length); /* copy label name with start and length */
+			symdata.name[ctx->lookahead.length] = '\0';
+			symdata.as.label.pc = ctx->virtual_pc; /* use the virtual cursor position as label pc */
+			symdata.as.label.is_defined = 1;
+
+			if (pocol_sympush(&ctx->symbols, &symdata) == -1)
+				compiler_error(ctx, "duplicate label `%s`", symdata.name);
+
+			/* skip label */
+			consume_until_newline(ctx);
+			parser_advance(ctx);
+			continue;
+		}
+
+		if (ctx->lookahead.type == TOK_IDENT) {
+			char name[ctx->lookahead.length + 1];
+			memcpy(name, ctx->lookahead.start, ctx->lookahead.length);
+			name[ctx->lookahead.length] = '\0';
+
+			/* parse instruction */
+			if (parse_inst(ctx) == 0) continue;
+			compiler_error(ctx, "unknown `%s` instruction in program", name);
+			parser_advance(ctx);
+			continue;
+		}
+
+		parser_advance(ctx); /* next token (skip invalid token) */
+	}
 }
 
 // NOTE: Don't auto quit if error, just continue. (like gcc/c compiler behavior)
@@ -147,53 +199,18 @@ int pocol_compile_file(CompilerCtx *ctx, char *out)
 	header.version = POCOL_VERSION;
 	fwrite(&header, sizeof(PocolHeader), 1, ctx->out); /* create header placeholder. Because after that we emit instruction*/
 
-	/* Set Starter */
-	ctx->cursor = ctx->source;
-	ctx->line = 1; /* enable line:col prefix if error occured */
-	ctx->lookahead = next(ctx);
+	/* start parsing */
+	for (ctx->pass = 1; ctx->pass <= 2; ctx->pass++) {
+		ctx->line = 1;
+		ctx->col = 1;
+		ctx->virtual_pc = sizeof(PocolHeader); /* reset (skip header offset) */
+		ctx->cursor = ctx->source; /* RESET cursor to the beggining of source */
+		ctx->lookahead = next(ctx);
 
-	while (ctx->lookahead.type != TOK_EOF) {
-		if (ctx->lookahead.type == TOK_LABEL) {
-			/* push to symbol table */
-			SymData symdata;
+		pocol_parse_file(ctx);
 
-			symdata.kind = SYM_LABEL;
-			memcpy(symdata.name, ctx->lookahead.start, ctx->lookahead.length); /* copy label name with start and length */
-			symdata.name[ctx->lookahead.length] = '\0';
-			symdata.as.label.pc = (Inst_Addr) ftell(ctx->out); /* use stream cursor position as label pc */
-			symdata.as.label.is_defined = 1;
-
-			if (pocol_sympush(&ctx->symbols, &symdata) == -1)
-				compiler_error(ctx, "duplicate label `%s`", symdata.name);
-
-			/* skip label */
-			consume_until_newline(ctx);
-			parser_advance(ctx);
-			continue;
-		}
-
-		/* only parse instruction if the token.type is identifier */
-		if (ctx->lookahead.type == TOK_IDENT) {
-			char name[ctx->lookahead.length + 1];
-			memcpy(name, ctx->lookahead.start, ctx->lookahead.length);
-			name[ctx->lookahead.length] = '\0';
-
-			if (parse_inst(ctx) == 0) continue;
-
-			SymData *label_data = pocol_symfind(&ctx->symbols, SYM_LABEL, name);
-			if (label_data != NULL) {
-				emit64(ctx->out, label_data->as.label.pc);
-				parser_advance(ctx);
-				continue;
-			}
-
-			compiler_error(ctx, "unknown `%s` instruction in program", name);
-
-			parser_advance(ctx);
-			continue;
-		}
-
-		parser_advance(ctx); /* next token (skip invalid token) */
+		if (ctx->pass == 1 && ctx->total_error > 0)
+			break;
 	}
 
 	/* program entry point */
@@ -206,7 +223,7 @@ int pocol_compile_file(CompilerCtx *ctx, char *out)
 
 
 	/* set cursor to header placeholder and overwrite it */
-	fseek(ctx->out, 0, SEEK_SET); /* goto beggining of binary strean cursor */
+	fseek(ctx->out, 0, SEEK_SET); /* goto beggining of binary stream cursor */
 	fwrite(&header, sizeof(PocolHeader), 1, ctx->out);
 
 	munmap(ctx->source, st.st_size);
@@ -214,7 +231,6 @@ int pocol_compile_file(CompilerCtx *ctx, char *out)
 	fclose(ctx->out);
 
 	ctx->cursor = NULL;  /* dont skip until newline, we doesnt have anymore string here (EOF) */
-
 	if (ctx->total_error > 0) {
 		ctx->line = 0;	/* dont print line:col */
 
