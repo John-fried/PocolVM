@@ -75,7 +75,7 @@ int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 	}
 
 	if (header.magic != POCOL_MAGIC) {
-		pocol_error("wrong magic number `0x%08X`\n", magic_header);
+		pocol_error("wrong magic number `0x%08X`\n", header.magic);
 		goto error;
 	}
 
@@ -86,7 +86,7 @@ int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 	}
 
 	if (header.code_size > POCOL_MEMORY_SIZE) {
-		pocol_error("size exceeds limit: %ld/%d bytes\n", size, POCOL_MEMORY_SIZE);
+		pocol_error("size exceeds limit: %ld/%d bytes\n", header.code_size, POCOL_MEMORY_SIZE);
 		goto error;
 	}
 
@@ -184,8 +184,7 @@ Err pocol_execute_program_jit(PocolVM *vm, int limit, int jit_enabled)
 		/* Use interpreter */
 		return pocol_execute_program(vm, limit);
 	}
-}
-{
+
 	while (limit != 0 && !vm->halt) {
 		Err err = pocol_execute_inst(vm);
 		if (err != ERR_OK) {
