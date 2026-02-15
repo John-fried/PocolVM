@@ -1,6 +1,6 @@
 # Pocol VM
 
-Pocol is a minimalist, register-based [Virtual Machine](https://en.wikipedia.org/wiki/Virtual_machine) with a stack, written in pure [C](https://en.wikipedia.org/wiki/C_(programming_language)). It includes a compiler to transform `.pcl` assembly-like source into `.pob` (Pocol Binary).
+Pocol is a lightweight, register-based [Virtual Machine](https://en.wikipedia.org/wiki/Virtual_machine) with a stack, written in pure [C](https://en.wikipedia.org/wiki/C_(programming_language)). It includes a compiler to transform `.pcl` assembly-like source into `.pob` (Pocol Binary).
 
 ## Architecture
 
@@ -26,4 +26,4 @@ make
 
 ## License
 
-MIT. See headers for copyright details.
+MIT. See headers or [LICENSE File](https://github.com/John-fried/PocolVM/tree/main/LICENSE) for copyright details.
