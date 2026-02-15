@@ -39,7 +39,6 @@ int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 	errno = 0;
 
 	struct stat st;
-	long size = 0;
 	FILE *fp = fopen(path, "rb");
 	if (!fp)
 		goto error;
@@ -47,42 +46,42 @@ int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 	if (fstat(fileno(fp), &st) < 0)
 		goto error;
 
-	/* is regular file? */
-	if (!S_ISREG(st.st_mode)) {
-		pocol_error("file format not recognized\n");
-		goto error;
-	}
-
-	size = st.st_size;
-	if (size == 0) {
-		errno = ENOEXEC;
-		goto error;
-	}
-
-	if (size > POCOL_MEMORY_SIZE) {
-		pocol_error("size exceeds limit: %ld/%d bytes\n", size, POCOL_MEMORY_SIZE);
-		goto error;
-	}
-
 	*vm = malloc(sizeof(PocolVM));
 	if (!(*vm))
 		goto error;
 
-	uint32_t magic_header; /* 4 bit magic header */
-
-	memset((*vm), 0, sizeof(**vm));
-	fread((*vm)->memory, 1, size, fp);
-	memcpy(&magic_header, (*vm)->memory, sizeof(uint32_t));
-
-	if (magic_header != POCOL_MAGIC) {
-		pocol_error("wrong magic number `0x%08X`\n", magic_header);
+	/* Read header */
+	PocolHeader header;
+	if (fread(&header, sizeof(PocolHeader), 1, fp) != 1) {
+		pocol_error("unsupported file format\n");
 		goto error;
 	}
-	fclose(fp);
+
+	if (header.magic != POCOL_MAGIC) {
+		pocol_error("wrong magic number `0x%08X`\n", header.magic);
+		goto error;
+	}
+
+	if (header.version != POCOL_VERSION) {
+		pocol_error("program version not supported (expected %d, got %d)\n", POCOL_VERSION,
+			header.version);
+		goto error;
+	}
+
+	if (header.code_size > POCOL_MEMORY_SIZE) {
+		pocol_error("size exceeds limit: %ld/%d bytes\n", header.code_size,
+			POCOL_MEMORY_SIZE);
+		goto error;
+	}
+
+	memset((*vm), 0, sizeof(**vm));
+	fseek(fp, 0, SEEK_SET); /* Set cursor to beggining of program */
+	fread((*vm)->memory, 1, st.st_size, fp);
+	fclose(fp); /* close file pointer (not used) */
 
 	/* Set initial valuee */
 	(*vm)->halt = 0;
-	(*vm)->pc = POCOL_MAGIC_SIZE; /* skip magic_header */
+	(*vm)->pc = header.entry_point; /* skip magic_header */
 	(*vm)->sp = 0;
 	return 0;
 

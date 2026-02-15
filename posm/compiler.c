@@ -141,9 +141,11 @@ int pocol_compile_file(CompilerCtx *ctx, char *out)
 	if (!ctx->out)
 		goto error;
 
-	/* write magic */
-	uint32_t magic_header = POCOL_MAGIC;
-	fwrite(&magic_header, sizeof(uint32_t), 1, ctx->out);
+	/* init header */
+	PocolHeader header = {0};
+	header.magic = POCOL_MAGIC;
+	header.version = POCOL_VERSION;
+	fwrite(&header, sizeof(PocolHeader), 1, ctx->out); /* create header placeholder. Because after that we emit instruction*/
 
 	/* Set Starter */
 	ctx->cursor = ctx->source;
@@ -194,15 +196,24 @@ int pocol_compile_file(CompilerCtx *ctx, char *out)
 		parser_advance(ctx); /* next token (skip invalid token) */
 	}
 
+	/* program entry point */
+	header.code_size = ftell(ctx->out) - sizeof(PocolHeader);
+	SymData *start_node = pocol_symfind(&ctx->symbols, SYM_LABEL, "_start");
+	if (start_node != NULL)
+		header.entry_point = start_node->as.label.pc;
+	else
+		compiler_error(ctx, "undefined reference to `_start`");
+
+
+	/* set cursor to header placeholder and overwrite it */
+	fseek(ctx->out, 0, SEEK_SET); /* goto beggining of binary strean cursor */
+	fwrite(&header, sizeof(PocolHeader), 1, ctx->out);
+
 	munmap(ctx->source, st.st_size);
 	close(fd);
 	fclose(ctx->out);
 
 	ctx->cursor = NULL;  /* dont skip until newline, we doesnt have anymore string here (EOF) */
-
-	/* check for _start symbol */
-	if (pocol_symfind(&ctx->symbols, SYM_LABEL, "_start") == NULL)
-		compiler_error(ctx, "undefined reference to `_start`");
 
 	if (ctx->total_error > 0) {
 		ctx->line = 0;	/* dont print line:col */

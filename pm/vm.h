@@ -9,7 +9,8 @@
 #define POCOL_POCOLVM_H
 
 #define POCOL_MAGIC         0x6f636f70  /* 'o' 'c' 'o' 'p' reversed can be seen using 'cat' */
-#define POCOL_MAGIC_SIZE    4
+#define POCOL_VERSION	    1
+
 #define POCOL_OPERAND_MAX	2
 #define POCOL_MEMORY_SIZE	(640 * 1000)
 #define POCOL_STACK_SIZE	1024
@@ -53,6 +54,13 @@ typedef struct {
     const char *name;
     int operand; /* operand count */
 } Inst_Def;
+
+typedef struct {
+	uint32_t magic;
+	uint32_t version; /* ensure suitable version */
+	Inst_Addr entry_point; /* _start */
+	uint64_t code_size; /* instruction block size */
+} PocolHeader;
 
 typedef struct {
 	/* Basic components */
