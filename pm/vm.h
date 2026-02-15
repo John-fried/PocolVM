@@ -74,10 +74,10 @@ typedef struct {
 	Stack_Addr sp; 				/* stack pointer (0-255) as the STACK_SIZE and +1 space */
 	uint64_t   registers[8]; 		/* 8 registers */
 	unsigned int halt : 1;			/* halt status */
-	
+
 	/* JIT context (optional) */
 	void *jit_context;                      /* Opaque pointer to JIT context */
-	
+
 	/* System call context */
 	SysCallContext *syscall_ctx;          /* System call context */
 } PocolVM;

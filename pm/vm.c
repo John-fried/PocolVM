@@ -61,7 +61,6 @@ int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 	errno = 0;
 
 	struct stat st;
-	long size = 0;
 	FILE *fp = fopen(path, "rb");
 	if (!fp)
 		goto error;
@@ -69,19 +68,24 @@ int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 	if (fstat(fileno(fp), &st) < 0)
 		goto error;
 
-	/* is regular file? */
-	if (!S_ISREG(st.st_mode)) {
-		pocol_error("file format not recognized\n");
+	PocolHeader header;
+	if (fread(&header, sizeof(PocolHeader), 1, fp) != 1) {
+		pocol_error("unsupported file format\n");
 		goto error;
 	}
 
-	size = st.st_size;
-	if (size == 0) {
-		errno = ENOEXEC;
+	if (header.magic != POCOL_MAGIC) {
+		pocol_error("wrong magic number `0x%08X`\n", magic_header);
 		goto error;
 	}
 
-	if (size > POCOL_MEMORY_SIZE) {
+	if (header.version != POCOL_VERSION) {
+		pocol_error("program version not supported (expected %d, got %d)\n", POCOL_VERSION,
+			header.version);
+		goto error;
+	}
+
+	if (header.code_size > POCOL_MEMORY_SIZE) {
 		pocol_error("size exceeds limit: %ld/%d bytes\n", size, POCOL_MEMORY_SIZE);
 		goto error;
 	}
@@ -90,30 +94,23 @@ int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 	if (!(*vm))
 		goto error;
 
-	uint32_t magic_header; /* 4 bit magic header */
-
 	memset((*vm), 0, sizeof(**vm));
-	fread((*vm)->memory, 1, size, fp);
-	memcpy(&magic_header, (*vm)->memory, sizeof(uint32_t));
-	
+	fread((*vm)->memory, 1, st.st_size, fp);
+
 	/* Initialize JIT context if available */
 	(*vm)->jit_context = NULL;
-	
+
 	/* Initialize system call context */
 	(*vm)->syscall_ctx = malloc(sizeof(SysCallContext));
 	if ((*vm)->syscall_ctx) {
 		syscalls_init((*vm)->syscall_ctx);
 	}
 
-	if (magic_header != POCOL_MAGIC) {
-		pocol_error("wrong magic number `0x%08X`\n", magic_header);
-		goto error;
-	}
 	fclose(fp);
 
 	/* Set initial valuee */
 	(*vm)->halt = 0;
-	(*vm)->pc = POCOL_MAGIC_SIZE; /* skip magic_header */
+	(*vm)->pc = header.entry_point; /* skip magic_header */
 	(*vm)->sp = 0;
 	return 0;
 
@@ -132,13 +129,13 @@ void pocol_free_vm(PocolVM *vm)
 		pocol_jit_free((JitContext*)vm->jit_context);
 		free(vm->jit_context);
 	}
-	
+
 	/* Free system call context */
 	if (vm->syscall_ctx) {
 		syscalls_free(vm->syscall_ctx);
 		free(vm->syscall_ctx);
 	}
-	
+
 	free(vm);
 }
 
@@ -173,14 +170,14 @@ Err pocol_execute_program_jit(PocolVM *vm, int limit, int jit_enabled)
 			}
 			pocol_jit_init((JitContext*)vm->jit_context, JIT_MODE_ENABLED, OPT_LEVEL_BASIC);
 		}
-		
+
 		/* Apply optimizations */
 		Err opt_err = pocol_optimize_bytecode(vm, OPT_LEVEL_BASIC);
 		if (opt_err != ERR_OK) {
 			pocol_error("Optimization failed: %s\n", err_as_cstr(opt_err));
 			return opt_err;
 		}
-		
+
 		/* Execute with JIT */
 		return pocol_jit_execute_program((JitContext*)vm->jit_context, vm, limit);
 	} else {
@@ -264,11 +261,11 @@ Err pocol_execute_inst(PocolVM *vm)
 		case INST_PRINT: /* (for debugging) */
 			printf("%" PRIu64 "", pocol_fetch_operand(vm, op1));
 			break;
-		
+
 		case INST_SYS: {
 			/* System call: r0 = syscall number, r1-r4 = arguments */
 			int syscall_num = (int)vm->registers[0];
-			
+
 			if (vm->syscall_ctx) {
 				syscalls_exec(vm->syscall_ctx, vm, syscall_num);
 			} else {
