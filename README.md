@@ -164,16 +164,16 @@ cd ../poclc && make
 ## Performance
 
 ### When JIT Shines
-✅ Compute-intensive loops
-✅ Programs with repetitive patterns
-✅ Long-running applications
-✅ Mathematical computations
+- Compute-intensive loops
+- Programs with repetitive patterns
+- Long-running applications
+- Mathematical computations
 
 ### When Interpreter is Better
-⚠️ Very short programs
-⚠️ Frequent control flow changes
-⚠️ Memory-constrained environments
-⚠️ Debugging and development
+- Very short programs
+- Frequent control flow changes
+- Memory-constrained environments
+- Debugging and development
 
 ## Testing
 
