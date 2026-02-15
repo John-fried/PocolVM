@@ -1,0 +1,8 @@
+func main() {
+	var a = 10;
+	var b = 20;
+	if (a == b) { print 1; }
+	if (a != b) { print 2; }
+	if (a < b) { print 3; }
+	if (a > b) { print 4; }
+}

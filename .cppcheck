@@ -1,0 +1,18 @@
+[general]
+checks=*
+exitcode=0
+inline-suppr=true
+
+[performance]
+*:
+    # Disable performance warnings for VM-specific patterns
+    missingInclude=disabled
+
+[style]
+# Disable warning for reserved names
+*:
+    reservedName=disabled
+
+[cppcheck]
+# Suppress missingInclude for system headers
+missingInclude=false

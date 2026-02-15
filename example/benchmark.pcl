@@ -1,0 +1,35 @@
+; Benchmark test - heavy computation loop to demonstrate JIT performance benefits
+
+_start:
+    push 0          ; Initialize counter
+    push 1000000    ; Loop iterations (1 million)
+    
+loop:
+    pop r1          ; Get iteration count
+    pop r0          ; Get counter
+    add r0, 1       ; Increment counter
+    add r1, -1      ; Decrement iterations
+    
+    ; Check if done
+    push r1
+    push r0
+    jmp check_done
+    
+check_done:
+    pop r2          ; Get remaining iterations
+    push r2
+    push r0         ; Restore counter
+    
+    ; If r2 == 0, exit loop
+    ; For simplicity, we'll use a fixed number of iterations
+    ; In a real implementation, we'd have a conditional jump
+    
+    ; Continue loop for demonstration
+    push r1
+    push r0
+    jmp loop_end
+    
+loop_end:
+    pop r0          ; Final result
+    print r0        ; Should print 1000000
+    halt

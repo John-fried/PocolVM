@@ -1,0 +1,16 @@
+---
+Language: C
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
+BreakBeforeBraces: Linux
+AllowShortIfStatementsOnASingleLine: false
+IndentCaseLabels: false
+PointerAlignment: Left
+SpaceAfterCStyleCast: true
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortLoopsOnASingleLine: false

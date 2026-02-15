@@ -1,0 +1,12 @@
+; Test SYS_SLEEP
+_start:
+	push 1
+	print r0
+	push 12
+	pop r0
+	push 500
+	pop r1
+	sys
+	push 2
+	print r0
+	halt

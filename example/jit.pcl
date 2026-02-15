@@ -1,0 +1,24 @@
+; Simple test program to demonstrate JIT compilation
+; Performs arithmetic operations that can benefit from optimization
+
+_start:
+    push 100        ; Push 100 to stack
+    push 200        ; Push 200 to stack
+    pop r0          ; r0 = 200
+    pop r1          ; r1 = 100
+    
+    ; Simple arithmetic that can be optimized
+    add r0, 50      ; r0 = 250
+    add r1, 25      ; r1 = 125
+    add r0, r1      ; r0 = 375
+    
+    print r0        ; Should print 375
+    print r1        ; Should print 125
+    
+    ; Test with zero additions (should be eliminated by optimizer)
+    push 0
+    pop r2
+    add r2, 0       ; This should be eliminated
+    print r2        ; Should print 0
+    
+    halt

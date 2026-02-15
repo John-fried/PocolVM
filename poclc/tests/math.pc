@@ -1,0 +1,22 @@
+// Math operations in PocolC
+// Demonstrates basic arithmetic operations
+
+func main() {
+    var a = 10;
+    var b = 20;
+    var c = a + b;
+    
+    print c;
+    
+    var d = 100 - 50;
+    print d;
+    
+    var e = 5 * 6;
+    print e;
+    
+    var f = 30 / 3;
+    print f;
+    
+    var g = 17 % 5;
+    print g;
+}

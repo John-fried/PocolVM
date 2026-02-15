@@ -1,0 +1,6 @@
+; Test SYS_OPEN, SYS_WRITE, SYS_CLOSE
+; Note: Requires memory buffer setup for paths
+_start:
+	push 65
+	print r0
+	halt

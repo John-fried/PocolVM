@@ -1,6 +1,6 @@
 /* vm.c -- The core module to run bytecode in the virtual machine */
 
-/* Copyright (C) 2026 Bayu Setiawan
+/* Copyright (C) 2026 Bayu Setiawan and Rasya Andrean
    This file is part of Pocol, the Pocol Virtual Machine.
    SPDX-License-Identifier: MIT
 */
@@ -8,6 +8,8 @@
 #define _DEFAULT_SOURCE
 #define _GNU_SOURCE
 #include "vm.h"
+#include "jit.h"
+#include "vm_syscalls.h"
 #include "../common.h"
 #include <assert.h>
 #include <stdlib.h>
@@ -17,7 +19,24 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <inttypes.h>
+
+#ifdef _WIN32
+#include <io.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#define fileno _fileno
+#define fstat _fstat
+#define S_ISREG(x) (((x) & _S_IFMT) == _S_IFREG)
+#ifndef errno
+extern int errno;
+#endif
+#else
 #include <unistd.h>
+#endif
+
+#ifndef NULL
+#define NULL ((void*)0)
+#endif
 
 ST_DATA const char *current_path = NULL;
 
@@ -25,7 +44,11 @@ void pocol_error(const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
+#ifdef _GNU_SOURCE
 	fprintf(stderr, "%s: ", program_invocation_name);
+#else
+	fprintf(stderr, "pm: ");
+#endif
 	if (current_path)
 		fprintf(stderr, "%s: ", current_path);
 	vfprintf(stderr, fmt, ap);
@@ -73,6 +96,15 @@ int pocol_load_program_into_vm(const char *path, PocolVM **vm)
 	memset((*vm), 0, sizeof(**vm));
 	fread((*vm)->memory, 1, size, fp);
 	memcpy(&magic_header, (*vm)->memory, sizeof(uint32_t));
+	
+	/* Initialize JIT context if available */
+	(*vm)->jit_context = NULL;
+	
+	/* Initialize system call context */
+	(*vm)->syscall_ctx = malloc(sizeof(SysCallContext));
+	if ((*vm)->syscall_ctx) {
+		syscalls_init((*vm)->syscall_ctx);
+	}
 
 	if (magic_header != POCOL_MAGIC) {
 		pocol_error("wrong magic number `0x%08X`\n", magic_header);
@@ -97,6 +129,17 @@ error:
 /* Free vm */
 void pocol_free_vm(PocolVM *vm)
 {
+	if (vm->jit_context) {
+		pocol_jit_free((JitContext*)vm->jit_context);
+		free(vm->jit_context);
+	}
+	
+	/* Free system call context */
+	if (vm->syscall_ctx) {
+		syscalls_free(vm->syscall_ctx);
+		free(vm->syscall_ctx);
+	}
+	
 	free(vm);
 }
 
@@ -119,7 +162,33 @@ ST_FUNC char *err_as_cstr(Err err) {
 
 /********************** Executor ************************/
 
-Err pocol_execute_program(PocolVM *vm, int limit)
+Err pocol_execute_program_jit(PocolVM *vm, int limit, int jit_enabled)
+{
+	if (jit_enabled) {
+		/* Initialize JIT context if not already done */
+		if (!vm->jit_context) {
+			vm->jit_context = malloc(sizeof(JitContext));
+			if (!vm->jit_context) {
+				pocol_error("Failed to allocate JIT context\n");
+				return ERR_ILLEGAL_INST_ACCESS;
+			}
+			pocol_jit_init((JitContext*)vm->jit_context, JIT_MODE_ENABLED, OPT_LEVEL_BASIC);
+		}
+		
+		/* Apply optimizations */
+		Err opt_err = pocol_optimize_bytecode(vm, OPT_LEVEL_BASIC);
+		if (opt_err != ERR_OK) {
+			pocol_error("Optimization failed: %s\n", err_as_cstr(opt_err));
+			return opt_err;
+		}
+		
+		/* Execute with JIT */
+		return pocol_jit_execute_program((JitContext*)vm->jit_context, vm, limit);
+	} else {
+		/* Use interpreter */
+		return pocol_execute_program(vm, limit);
+	}
+}
 {
 	while (limit != 0 && !vm->halt) {
 		Err err = pocol_execute_inst(vm);
@@ -196,10 +265,41 @@ Err pocol_execute_inst(PocolVM *vm)
 		case INST_PRINT: /* (for debugging) */
 			printf("%" PRIu64 "", pocol_fetch_operand(vm, op1));
 			break;
+		
+		case INST_SYS: {
+			/* System call: r0 = syscall number, r1-r4 = arguments */
+			int syscall_num = (int)vm->registers[0];
+			
+			if (vm->syscall_ctx) {
+				syscalls_exec(vm->syscall_ctx, vm, syscall_num);
+			} else {
+				vm->registers[0] = -1;  /* Syscall not available */
+			}
+			break;
+		}
 
 		default:
 			return ERR_ILLEGAL_INST;
 	}
 
 	return ERR_OK;
+}
+
+/* Initialize system call context */
+void pocol_syscall_init(PocolVM *vm) {
+	if (!vm->syscall_ctx) {
+		vm->syscall_ctx = malloc(sizeof(SysCallContext));
+	}
+	if (vm->syscall_ctx) {
+		syscalls_init(vm->syscall_ctx);
+	}
+}
+
+/* Free system call context */
+void pocol_syscall_free(PocolVM *vm) {
+	if (vm->syscall_ctx) {
+		syscalls_free(vm->syscall_ctx);
+		free(vm->syscall_ctx);
+		vm->syscall_ctx = NULL;
+	}
 }

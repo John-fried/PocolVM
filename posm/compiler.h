@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 Bayu Setiawan
+/* Copyright (C) 2026 Bayu Setiawan and Rasya Andrean
    This file is part of Pocol, the Pocol Virtual Machine.
    SPDX-License-Identifier: MIT
 */

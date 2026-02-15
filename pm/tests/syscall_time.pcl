@@ -1,0 +1,7 @@
+; Test SYS_TIME
+_start:
+	push 11
+	pop r0
+	sys
+	print r0
+	halt

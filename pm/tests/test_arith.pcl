@@ -1,0 +1,7 @@
+; Test basic arithmetic
+_start:
+	push 10
+	push 20
+	add
+	print r0
+	halt

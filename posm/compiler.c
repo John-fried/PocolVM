@@ -12,8 +12,14 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <errno.h>
+
+#ifdef _WIN32
+#include <io.h>
+#define unlink _unlink
+#else
+#include <unistd.h>
+#endif
 
 /* instruction table */
 const Inst_Def inst_table[COUNT_INST] = {
@@ -27,7 +33,11 @@ const Inst_Def inst_table[COUNT_INST] = {
 
 void compiler_error(CompilerCtx *ctx, const char *fmt, ...)
 {
-	if (ctx->path == NULL) ctx->path = program_invocation_name;
+	#ifdef _GNU_SOURCE
+		if (ctx->path == NULL) ctx->path = program_invocation_name;
+	#else
+		if (ctx->path == NULL) ctx->path = "posm";
+	#endif
 
 	va_list ap;
 	va_start(ap, fmt);

@@ -1,0 +1,15 @@
+; Test JMP loop
+_start:
+	push 0
+	pop r0
+loop:
+	print r0
+	push r0
+	push 1
+	add
+	pop r0
+	push r0
+	push 5
+	lt
+	jmp loop
+	halt

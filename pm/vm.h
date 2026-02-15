@@ -1,6 +1,6 @@
 /* vm.h -- The core module to run bytecode in the virtual machine */
 
-/* Copyright (C) 2026 Bayu Setiawan
+/* Copyright (C) 2026 Bayu Setiawan and Rasya Andrean
    This file is part of Pocol, the Pocol Virtual Machine.
    SPDX-License-Identifier: MIT
 */
@@ -45,6 +45,7 @@ typedef enum {
     INST_ADD,
     INST_JMP,
     INST_PRINT,
+    INST_SYS,     /* System call instruction */
     COUNT_INST	/* last index, start with 0 (halt) and this counts */
 } Inst_Type;
 
@@ -54,6 +55,9 @@ typedef struct {
     int operand; /* operand count */
 } Inst_Def;
 
+/* Include system calls header */
+#include "vm_syscalls.h"
+
 typedef struct {
 	/* Basic components */
 	uint8_t    memory[POCOL_MEMORY_SIZE];  	/* Memory address Register */
@@ -62,12 +66,25 @@ typedef struct {
 	Stack_Addr sp; 				/* stack pointer (0-255) as the STACK_SIZE and +1 space */
 	uint64_t   registers[8]; 		/* 8 registers */
 	unsigned int halt : 1;			/* halt status */
+	
+	/* JIT context (optional) */
+	void *jit_context;                      /* Opaque pointer to JIT context */
+	
+	/* System call context */
+	SysCallContext *syscall_ctx;          /* System call context */
 } PocolVM;
 
 int pocol_load_program_into_vm(const char *path, PocolVM **vm);
 void pocol_free_vm(PocolVM *vm);
 Err pocol_execute_program(PocolVM *vm, int limit);
 Err pocol_execute_inst(PocolVM *vm);
+
+/* JIT execution functions */
+Err pocol_execute_program_jit(PocolVM *vm, int limit, int jit_enabled);
+
+/* System call functions */
+void pocol_syscall_init(PocolVM *vm);
+void pocol_syscall_free(PocolVM *vm);
 
 void pocol_error(const char *fmt, ...);
 

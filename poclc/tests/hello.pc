@@ -1,0 +1,7 @@
+// Hello World in PocolC
+// A simple program that prints a number
+
+func main() {
+    var x = 42;
+    print x;
+}

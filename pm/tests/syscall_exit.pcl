@@ -1,0 +1,8 @@
+; Test SYS_EXIT
+_start:
+	push 13
+	pop r0
+	push 0
+	pop r1
+	sys
+	halt
