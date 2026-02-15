@@ -36,8 +36,11 @@ YELLOW  = $(shell tput setaf 3 2>/dev/null || echo "")
 BLUE    = $(shell tput setaf 4 2>/dev/null || echo "")
 RESET   = $(shell tput sgr0 2>/dev/null || echo "")
 
-.PHONY: all
-all: info $(BUILDDIR)/$(TARGET)
+.PHONY: all build
+all: info build
+
+build:
+	$(MAKE) $(BUILDDIR)/$(TARGET)
 
 .PHONY: info
 info:
